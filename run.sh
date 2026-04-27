@@ -1,0 +1,18 @@
+uv run train.py \
+  --model resnet18\
+  --dataset cifar10 \
+  --optimizer adam_ota \
+  --rounds 600 \
+  --num_clients 100 \
+  --local_epochs 5 \
+  --batch_size 128 \
+  --server_lr 0.01 \
+  --local_lr 0.01 \
+  --momentum 0.9 \
+  --beta2 0.3 \
+  --alpha 1.5 \
+  --noise_scale 0.01 \
+  --non_iid \
+  --dir_conc 0.1 \
+  --use_mac \
+  --mac_clip 3.0

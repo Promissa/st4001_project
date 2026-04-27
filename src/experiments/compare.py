@@ -1,0 +1,147 @@
+"""
+Weeks 11-14: Comparative Analysis
+
+Runs all four methods under identical conditions and records per-round
+test accuracy and training loss for each:
+
+  1. FedAvg-OTA    (plain SGD server, no momentum)
+  2. FedAvgM-OTA   (momentum SGD server) ← primary baseline
+  3. AdaGrad-OTA   (proposed adaptive, α-norm accumulation)
+  4. Adam-OTA      (proposed adaptive, EMA α-norm)
+
+Each method is seeded identically and sees the same NoisyOracle realization
+per round to ensure fair comparison.
+
+Usage:
+    uv run src/experiments/compare.py
+    uv run src/experiments/compare.py --dataset cifar10 --model resnet18 --rounds 200
+"""
+
+import argparse
+import copy
+import json
+import os
+from pathlib import Path
+
+import torch
+from torch.utils.data import DataLoader
+
+from ..channel.ota import NoisyOracle
+from ..data.datasets import get_dataset, iid_partition, dirichlet_partition, make_loader
+from ..models.nets import get_model
+from ..optimizers.adagrad_ota import AdaGradOTA
+from ..optimizers.adam_ota import AdamOTA
+from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
+from .federated import run_round, evaluate
+
+
+def build_optimizer(name: str, model: torch.nn.Module, args) -> object:
+    params = list(model.parameters())
+    if name == "fedavg":
+        return FedAvgOTA(params, lr=args.server_lr)
+    elif name == "fedavgm":
+        return FedAvgMOTA(params, lr=args.server_lr, momentum=args.momentum)
+    elif name == "adagrad_ota":
+        return AdaGradOTA(params, lr=args.server_lr, alpha=args.alpha,
+                          beta1=args.momentum)
+    elif name == "adam_ota":
+        return AdamOTA(params, lr=args.server_lr, alpha=args.alpha,
+                       beta1=args.momentum, beta2=args.beta2)
+    raise ValueError(name)
+
+
+def run_comparison(args) -> dict:
+    """
+    Run all methods and return results dict:
+      { method_name: {"loss": [...], "acc": [...]} }
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
+
+    # --- Data (shared across all methods) ---
+    train_ds, test_ds = get_dataset(args.dataset)
+    if args.non_iid:
+        client_subsets = dirichlet_partition(train_ds, args.num_clients,
+                                             concentration=args.dir_conc)
+    else:
+        client_subsets = iid_partition(train_ds, args.num_clients)
+
+    client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
+    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=2)
+
+    oracle = NoisyOracle(
+        alpha=args.alpha,
+        noise_scale=args.noise_scale,
+        device=device,
+    )
+
+    methods = ["fedavg", "fedavgm", "adagrad_ota", "adam_ota"]
+    results = {m: {"loss": [], "acc": []} for m in methods}
+
+    for method in methods:
+        print(f"\n{'='*50}")
+        print(f"Method: {method.upper()}")
+        print(f"{'='*50}")
+
+        # Fresh model (same init for all methods via fixed seed)
+        torch.manual_seed(args.seed)
+        model = get_model(args.model, num_classes=10).to(device)
+        opt = build_optimizer(method, model, args)
+
+        for rnd in range(1, args.rounds + 1):
+            run_round(
+                model, client_loaders, oracle, opt,
+                local_epochs=args.local_epochs,
+                local_lr=args.local_lr,
+                use_mac=args.use_mac,
+                mac_clip=args.mac_clip,
+                device=device,
+            )
+            loss, acc = evaluate(model, test_loader, device)
+            results[method]["loss"].append(loss)
+            results[method]["acc"].append(acc)
+
+            if rnd % args.log_every == 0 or rnd == 1:
+                print(f"  Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+
+    return results
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="ADOTA-FL comparative analysis")
+    p.add_argument("--dataset", default="cifar10", choices=["mnist", "cifar10"])
+    p.add_argument("--model", default="resnet18",
+                   choices=["mlp", "convnet", "resnet18", "resnet34"])
+    p.add_argument("--rounds", type=int, default=200)
+    p.add_argument("--num_clients", type=int, default=10)
+    p.add_argument("--local_epochs", type=int, default=1)
+    p.add_argument("--batch_size", type=int, default=64)
+    p.add_argument("--server_lr", type=float, default=0.1)
+    p.add_argument("--local_lr", type=float, default=0.01)
+    p.add_argument("--local_epochs", type=int, default=5)
+    p.add_argument("--momentum", type=float, default=0.9, help="β₁ for momentum / 1st moment")
+    p.add_argument("--beta2", type=float, default=0.3, help="Adam-OTA β₂")
+    p.add_argument("--alpha", type=float, default=1.5, help="Noise tail index α")
+    p.add_argument("--noise_scale", type=float, default=0.01)
+    p.add_argument("--non_iid", action="store_true", default=True)
+    p.add_argument("--dir_conc", type=float, default=0.1,
+                   help="Dirichlet concentration for non-IID partition")
+    p.add_argument("--use_mac", action="store_true", default=False,
+                   help="Apply Median Anchored Clipping pre-processing")
+    p.add_argument("--mac_clip", type=float, default=3.0)
+    p.add_argument("--log_every", type=int, default=10)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--out_dir", type=str, default="results/comparison")
+    return p.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    results = run_comparison(args)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"{args.dataset}_{args.model}_alpha{args.alpha}_N{args.num_clients}.json"
+    with open(out_file, "w") as f:
+        json.dump({"args": vars(args), "results": results}, f, indent=2)
+    print(f"\nResults saved to {out_file}")
