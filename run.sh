@@ -1,5 +1,5 @@
 uv run train.py \
-  --model resnet18\
+  --model resnet18 \
   --dataset cifar10 \
   --optimizer adam_ota \
   --rounds 600 \
@@ -10,9 +10,7 @@ uv run train.py \
   --local_lr 0.01 \
   --momentum 0.9 \
   --beta2 0.3 \
-  --alpha 1.5 \
-  --noise_scale 0.01 \
+  --alpha 2.0 \
+  --noise_scale 0.05 \
   --non_iid \
-  --dir_conc 0.1 \
-  --use_mac \
-  --mac_clip 3.0
+  --dir_conc 0.1

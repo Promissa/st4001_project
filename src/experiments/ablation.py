@@ -1,24 +1,26 @@
 """
-Weeks 15-16: Ablation Studies
+Ablation studies (AWGN setting, α = 2).
 
-Two ablation axes from the proposal:
-  (A) Vary noise tail index α ∈ {1.1, 1.3, 1.5, 1.7, 1.9, 2.0}
-      → Validates the theoretical link: smaller α → slower convergence.
-      → Confirms hypothesis: Adam-OTA more resilient than AdaGrad-OTA.
+Two ablation axes:
+  (A) Vary noise scale γ ∈ {0.001, 0.005, 0.01, 0.05, 0.1, 0.5}
+      → Validates the central claim: as channel noise grows, plain
+        FedAvg/FedAvgM degrade or diverge while the adaptive optimizers
+        (AdaGrad-OTA, Adam-OTA) implicitly compress their effective step
+        size and stay stable — i.e. the second-moment accumulator behaves
+        as a noise-aware learning-rate filter.
 
   (B) Vary number of clients N ∈ {5, 10, 20, 50, 100}
-      → Validates scalability: more clients → better accuracy (OTA benefit).
+      → Validates the OTA averaging gain (noise variance contracts as 1/N).
 
-Results are saved as JSON and plotted automatically.
+Results are saved as JSON, plotted by src/experiments/plot.py.
 
 Usage:
-    uv run src/experiments/ablation.py --study alpha
-    uv run src/experiments/ablation.py --study clients
-    uv run src/experiments/ablation.py --study both
+    uv run -m src.experiments.ablation --study noise
+    uv run -m src.experiments.ablation --study clients
+    uv run -m src.experiments.ablation --study both
 """
 
 import argparse
-import copy
 import json
 from pathlib import Path
 
@@ -30,19 +32,34 @@ from ..data.datasets import get_dataset, dirichlet_partition, make_loader
 from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
-from ..optimizers.baselines import FedAvgMOTA
+from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
 from .federated import run_round, evaluate
 
 
-ALPHA_VALUES = [1.1, 1.3, 1.5, 1.7, 1.9, 2.0]
+NOISE_SCALES = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
 CLIENT_VALUES = [5, 10, 20, 50, 100]
+
+
+def _build_optimizer(name: str, model: torch.nn.Module, args) -> object:
+    params = list(model.parameters())
+    if name == "fedavg":
+        return FedAvgOTA(params, lr=args.server_lr)
+    if name == "fedavgm":
+        return FedAvgMOTA(params, lr=args.server_lr, momentum=args.momentum)
+    if name == "adagrad_ota":
+        return AdaGradOTA(params, lr=args.server_lr, alpha=args.alpha,
+                          beta1=args.momentum)
+    if name == "adam_ota":
+        return AdamOTA(params, lr=args.server_lr, alpha=args.alpha,
+                       beta1=args.momentum, beta2=args.beta2)
+    raise ValueError(name)
 
 
 def _run_single(
     model_name: str,
     dataset_name: str,
     num_clients: int,
-    alpha: float,
+    noise_scale: float,
     rounds: int,
     args,
     device: torch.device,
@@ -55,22 +72,14 @@ def _run_single(
     client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=2)
 
-    oracle = NoisyOracle(alpha=alpha, noise_scale=args.noise_scale, device=device)
+    oracle = NoisyOracle(alpha=args.alpha, noise_scale=noise_scale, device=device)
 
     torch.manual_seed(args.seed)
     model = get_model(model_name, num_classes=10).to(device)
-    params = list(model.parameters())
-
-    if optimizer_name == "adagrad_ota":
-        opt = AdaGradOTA(params, lr=args.server_lr, alpha=alpha, beta1=args.momentum)
-    elif optimizer_name == "adam_ota":
-        opt = AdamOTA(params, lr=args.server_lr, alpha=alpha,
-                      beta1=args.momentum, beta2=args.beta2)
-    else:
-        opt = FedAvgMOTA(params, lr=args.server_lr, momentum=args.momentum)
+    opt = _build_optimizer(optimizer_name, model, args)
 
     loss_hist, acc_hist = [], []
-    for rnd in range(1, rounds + 1):
+    for _ in range(1, rounds + 1):
         run_round(model, client_loaders, oracle, opt,
                   local_epochs=args.local_epochs,
                   local_lr=args.local_lr,
@@ -83,30 +92,30 @@ def _run_single(
     return {"loss": loss_hist, "acc": acc_hist}
 
 
-def ablation_alpha(args, device: torch.device) -> dict:
+def ablation_noise(args, device: torch.device) -> dict:
     """
-    Ablation A: vary α, fix N.
-    Runs AdaGrad-OTA, Adam-OTA, FedAvgM-OTA for each α value.
+    Ablation A: vary noise scale γ, fix N.
+    Runs all four optimizers at each γ to expose the noise-resilience gap.
     """
-    print("\n=== Ablation: Noise tail index α ===")
+    print("\n=== Ablation: AWGN noise scale γ ===")
     results = {}
-    for alpha in ALPHA_VALUES:
-        results[alpha] = {}
-        for opt_name in ["fedavgm", "adagrad_ota", "adam_ota"]:
-            print(f"  α={alpha:.1f}  {opt_name} ...", flush=True)
-            results[alpha][opt_name] = _run_single(
+    for gamma in NOISE_SCALES:
+        results[gamma] = {}
+        for opt_name in ["fedavg", "fedavgm", "adagrad_ota", "adam_ota"]:
+            print(f"  γ={gamma:<6}  {opt_name} ...", flush=True)
+            results[gamma][opt_name] = _run_single(
                 args.model, args.dataset, args.num_clients,
-                alpha, args.rounds, args, device, opt_name,
+                gamma, args.rounds, args, device, opt_name,
             )
-            final_acc = results[alpha][opt_name]["acc"][-1]
+            final_acc = results[gamma][opt_name]["acc"][-1]
             print(f"    → final acc={final_acc:.4f}")
     return results
 
 
 def ablation_clients(args, device: torch.device) -> dict:
     """
-    Ablation B: vary N, fix α.
-    Runs Adam-OTA for each N value (best method per proposal hypothesis).
+    Ablation B: vary N, fix noise scale.
+    Runs Adam-OTA at each N value.
     """
     print("\n=== Ablation: Number of clients N ===")
     results = {}
@@ -114,7 +123,7 @@ def ablation_clients(args, device: torch.device) -> dict:
         print(f"  N={N} ...", flush=True)
         results[N] = _run_single(
             args.model, args.dataset, N,
-            args.alpha, args.rounds, args, device, "adam_ota",
+            args.noise_scale, args.rounds, args, device, "adam_ota",
         )
         final_acc = results[N]["acc"][-1]
         print(f"    → final acc={final_acc:.4f}")
@@ -122,17 +131,18 @@ def ablation_clients(args, device: torch.device) -> dict:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="ADOTA-FL ablation studies")
-    p.add_argument("--study", default="both", choices=["alpha", "clients", "both"])
+    p = argparse.ArgumentParser(description="ADOTA-FL ablation studies (AWGN)")
+    p.add_argument("--study", default="both", choices=["noise", "clients", "both"])
     p.add_argument("--dataset", default="cifar10", choices=["mnist", "cifar10"])
     p.add_argument("--model", default="resnet18",
                    choices=["mlp", "convnet", "resnet18", "resnet34"])
     p.add_argument("--rounds", type=int, default=100)
     p.add_argument("--num_clients", type=int, default=10,
-                   help="Fixed N for alpha ablation")
-    p.add_argument("--alpha", type=float, default=1.5,
-                   help="Fixed α for client-count ablation")
-    p.add_argument("--noise_scale", type=float, default=0.01)
+                   help="Fixed N for noise-scale ablation")
+    p.add_argument("--alpha", type=float, default=2.0,
+                   help="Stability index of the noise (2.0 = AWGN)")
+    p.add_argument("--noise_scale", type=float, default=0.05,
+                   help="Fixed γ for client-count ablation")
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--server_lr", type=float, default=1e-4)
     p.add_argument("--local_lr", type=float, default=0.01)
@@ -154,16 +164,20 @@ if __name__ == "__main__":
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.study in ("alpha", "both"):
-        res_alpha = ablation_alpha(args, device)
-        path = out_dir / f"ablation_alpha_{args.dataset}_{args.model}.json"
+    if args.study in ("noise", "both"):
+        res_noise = ablation_noise(args, device)
+        path = out_dir / f"ablation_noise_{args.dataset}_{args.model}.json"
         with open(path, "w") as f:
-            json.dump({"args": vars(args), "results": {str(k): v for k, v in res_alpha.items()}}, f, indent=2)
+            json.dump({"args": vars(args),
+                       "results": {str(k): v for k, v in res_noise.items()}},
+                      f, indent=2)
         print(f"Saved: {path}")
 
     if args.study in ("clients", "both"):
         res_clients = ablation_clients(args, device)
         path = out_dir / f"ablation_clients_{args.dataset}_{args.model}.json"
         with open(path, "w") as f:
-            json.dump({"args": vars(args), "results": {str(k): v for k, v in res_clients.items()}}, f, indent=2)
+            json.dump({"args": vars(args),
+                       "results": {str(k): v for k, v in res_clients.items()}},
+                      f, indent=2)
         print(f"Saved: {path}")

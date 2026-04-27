@@ -1,11 +1,12 @@
 """
 Analog Over-the-Air (A-OTA) aggregation — the "Noisy Oracle".
 
-Models gradient aggregation with symmetric α-stable noise:
+Models gradient aggregation with additive channel noise:
     g_t = (1/N) * sum_n ∇f_n(w_t)  +  ξ_t
 
-where:
-  - ξ_t ~ symmetric α-stable interference (i.i.d. entries)
+By default ξ_t is i.i.d. AWGN (alpha = 2). Setting alpha < 2 yields
+symmetric α-stable interference; the experiments in this project use
+the AWGN setting throughout.
 """
 
 import torch
@@ -23,13 +24,13 @@ class NoisyOracle:
     def __init__(
         self,
         alpha: float = 2.0,
-        noise_scale: float = 0.01,
+        noise_scale: float = 0.05,
         device: torch.device = torch.device("cpu"),
     ):
         """
         Args:
-            alpha:         Noise tail index (1 < alpha <= 2). alpha=2 → AWGN.
-            noise_scale:   Scale parameter γ of the α-stable interference ξ_t.
+            alpha:         Stability index of ξ_t (default 2.0 → AWGN).
+            noise_scale:   Scale parameter γ of the additive interference.
             device:        Compute device.
         """
         self.alpha = alpha

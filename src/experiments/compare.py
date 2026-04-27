@@ -1,20 +1,18 @@
 """
-Weeks 11-14: Comparative Analysis
-
-Runs all four methods under identical conditions and records per-round
-test accuracy and training loss for each:
+Comparative analysis: run all four server-side optimizers under identical
+AWGN-OTA conditions and record per-round test accuracy / training loss.
 
   1. FedAvg-OTA    (plain SGD server, no momentum)
-  2. FedAvgM-OTA   (momentum SGD server) ← primary baseline
-  3. AdaGrad-OTA   (proposed adaptive, α-norm accumulation)
-  4. Adam-OTA      (proposed adaptive, EMA α-norm)
+  2. FedAvgM-OTA   (momentum SGD server) — primary baseline
+  3. AdaGrad-OTA   (server-side AdaGrad on the OTA-aggregated gradient)
+  4. Adam-OTA      (server-side Adam on the OTA-aggregated gradient)
 
-Each method is seeded identically and sees the same NoisyOracle realization
-per round to ensure fair comparison.
+Each method shares the same seed, data partition, and per-round noise
+realisation for a fair comparison.
 
 Usage:
-    uv run src/experiments/compare.py
-    uv run src/experiments/compare.py --dataset cifar10 --model resnet18 --rounds 200
+    uv run -m src.experiments.compare
+    uv run -m src.experiments.compare --dataset cifar10 --model resnet18 --rounds 200
 """
 
 import argparse
@@ -114,15 +112,16 @@ def parse_args():
                    choices=["mlp", "convnet", "resnet18", "resnet34"])
     p.add_argument("--rounds", type=int, default=200)
     p.add_argument("--num_clients", type=int, default=10)
-    p.add_argument("--local_epochs", type=int, default=1)
+    p.add_argument("--local_epochs", type=int, default=5)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--server_lr", type=float, default=0.1)
     p.add_argument("--local_lr", type=float, default=0.01)
-    p.add_argument("--local_epochs", type=int, default=5)
     p.add_argument("--momentum", type=float, default=0.9, help="β₁ for momentum / 1st moment")
     p.add_argument("--beta2", type=float, default=0.3, help="Adam-OTA β₂")
-    p.add_argument("--alpha", type=float, default=1.5, help="Noise tail index α")
-    p.add_argument("--noise_scale", type=float, default=0.01)
+    p.add_argument("--alpha", type=float, default=2.0,
+                   help="Stability index of the noise (2.0 = AWGN, default)")
+    p.add_argument("--noise_scale", type=float, default=0.05,
+                   help="Noise scale γ (std ≈ γ·√2 for AWGN)")
     p.add_argument("--non_iid", action="store_true", default=True)
     p.add_argument("--dir_conc", type=float, default=0.1,
                    help="Dirichlet concentration for non-IID partition")

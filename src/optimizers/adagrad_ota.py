@@ -1,17 +1,19 @@
 """
-AdaGrad-OTA: server-side AdaGrad update for Over-the-Air FL.
+AdaGrad-OTA: server-side AdaGrad update applied to the OTA-aggregated gradient.
 
-Implements Algorithm 1 (AdaGrad branch) from Wang et al. (2024):
+The server receives a noisy aggregated gradient g_t each round and applies a
+per-coordinate AdaGrad-style update:
 
     Δ_t  = β₁ · Δ_{t-1}  +  (1 − β₁) · g_t          [momentum smoothing]
-    v_t  = v_{t-1}  +  |Δ_t|^α                        [α-norm accumulation]
-    w_{t+1} = w_t  −  η · Δ_t / (ᵅ√v_t + ε)          [α-root step]
+    v_t  = v_{t-1}  +  |Δ_t|^α                        [accumulated |·|^α]
+    w_{t+1} = w_t  −  η · Δ_t / (v_t^{1/α} + ε)
 
-The accumulated |Δ_t|^α grows faster under heavy-tailed noise (large |Δ_t|
-from impulses), automatically compressing the effective learning rate —
-acting as an implicit noise filter without requiring channel state information.
+α = 2 (default) recovers classical AdaGrad; that is the AWGN setting used
+throughout this project. β₁ = 0 turns off momentum smoothing.
 
-Convergence rate: O(ln T / T^(1−1/α))  (Theorem 1)
+The accumulator v_t grows whenever channel noise inflates |Δ_t|, so the
+effective per-coordinate learning rate contracts — providing implicit
+noise filtering without explicit channel-state information.
 """
 
 import torch
@@ -30,7 +32,7 @@ class AdaGradOTA:
         self,
         params: list[torch.Tensor],
         lr: float = 0.01,
-        alpha: float = 1.5,
+        alpha: float = 2.0,
         beta1: float = 0.0,
         eps: float = 1e-4,
     ):
@@ -38,8 +40,9 @@ class AdaGradOTA:
         Args:
             params: List of global model parameter tensors (model.parameters()).
             lr:     Step size η.
-            alpha:  Tail index of interference distribution (matches noise alpha).
-            beta1:  Momentum coefficient for Δ_t. beta1=0 → no momentum (pure AdaGrad).
+            alpha:  Exponent of the second-moment accumulator (default 2.0
+                    → classical AdaGrad).
+            beta1:  Momentum coefficient for Δ_t. beta1=0 → pure AdaGrad.
             eps:    Numerical stability constant ε.
         """
         self.params = list(params)
@@ -63,14 +66,13 @@ class AdaGradOTA:
         for p, g, delta, v in zip(self.params, agg_grads, self.Delta, self.v):
             g = g.to(p.device)
 
-            # Eq. (8): momentum smoothing of the aggregated gradient
+            # Momentum smoothing of the noisy aggregated gradient
             delta.mul_(self.beta1).add_(g, alpha=1.0 - self.beta1)
 
-            # Eq. (9): accumulate α-th power of |Δ_t|  (entry-wise)
+            # Accumulate |Δ|^α entry-wise (α = 2 → classical AdaGrad)
             v.add_(delta.abs().pow(self.alpha))
 
-            # Eq. (11): update — divide by α-th root of v_t
-            # α√v  is computed as  v^(1/α)
+            # Parameter update — α-th-root normalisation
             denom = v.pow(1.0 / self.alpha).add_(self.eps)
             p.addcdiv_(delta, denom, value=-self.lr)
 

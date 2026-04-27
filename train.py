@@ -1,18 +1,17 @@
 """
-ADOTA-FL — main training entry point.
+ADOTA-FL — single-run training entry point.
 
-Covers Weeks 5-14 of the research schedule: single-run training with any
-optimizer, any dataset, any noise setting. For full comparative analysis
-and ablation studies, use the dedicated runners:
+Trains a global model under simulated Analog-OTA aggregation with AWGN.
+For comparative analysis and ablation studies use the dedicated runners:
 
-    uv run -m src.experiments.compare   [Weeks 11-14]
-    uv run -m src.experiments.ablation  [Weeks 15-16]
-    uv run -m src.experiments.plot      [Weeks 15-16]
+    uv run -m src.experiments.compare
+    uv run -m src.experiments.ablation
+    uv run -m src.experiments.plot
 
 Usage:
     uv run train.py
     uv run train.py --dataset cifar10 --model resnet18 --optimizer adam_ota \\
-                    --alpha 1.5 --rounds 200 --non_iid
+                    --noise_scale 0.05 --rounds 200 --non_iid
 """
 
 import argparse
@@ -40,7 +39,7 @@ def build_optimizer(name: str, model, args):
         return FedAvgMOTA(params, lr=args.server_lr, momentum=args.momentum)
     elif name == "adagrad_ota":
         return AdaGradOTA(params, lr=args.server_lr, alpha=args.alpha,
-                          beta1=args.momentum)-09=90-=90-0-0-0-0-0-0-0-0-0-
+                          beta1=args.momentum)
     elif name == "adam_ota":
         return AdamOTA(params, lr=args.server_lr, alpha=args.alpha,
                        beta1=args.momentum, beta2=args.beta2)
@@ -63,17 +62,17 @@ def parse_args():
     p.add_argument("--momentum", type=float, default=0.9)
     p.add_argument("--beta2", type=float, default=0.3)
     # Channel
-    p.add_argument("--alpha", type=float, default=1.5,
-                   help="Noise tail index (2=AWGN, 1<α<2=heavy-tailed impulsive)")
-    p.add_argument("--noise_scale", type=float, default=0.01,
-                   help="Scale of α-stable noise (smaller = less noise)")
+    p.add_argument("--alpha", type=float, default=2.0,
+                   help="Stability index of the noise (2.0 = AWGN, default)")
+    p.add_argument("--noise_scale", type=float, default=0.05,
+                   help="Noise scale γ (std ≈ γ·√2 for AWGN)")
     # Data
     p.add_argument("--non_iid", action="store_true",
                    help="Use Dirichlet non-IID partition (Dir=0.1)")
     p.add_argument("--dir_conc", type=float, default=0.1)
-    # MAC
-    p.add_argument("--use_mac", action="store_true", default=True,
-                   help="Apply Median Anchored Clipping before optimizer")
+    # Optional robust pre-processing (off by default; AWGN setting)
+    p.add_argument("--use_mac", action="store_true", default=False,
+                   help="Apply Median Anchored Clipping before the optimizer")
     p.add_argument("--mac_clip", type=float, default=3.0)
     # Misc
     p.add_argument("--seed", type=int, default=42)

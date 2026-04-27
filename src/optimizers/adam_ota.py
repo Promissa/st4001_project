@@ -1,17 +1,20 @@
 """
-Adam-OTA: server-side Adam update for Over-the-Air FL.
+Adam-OTA: server-side Adam update applied to the OTA-aggregated gradient.
 
-Implements Algorithm 1 (Adam branch) from Wang et al. (2024):
+The server receives a noisy aggregated gradient g_t each round and applies
+a momentum-smoothed, second-moment-normalised step:
 
-    Δ_t = β₁ · Δ_{t-1}  +  (1 − β₁) · g_t                [1st moment / momentum]
-    v_t = β₂ · v_{t-1}  +  (1 − β₂) · |Δ_t|^α            [EMA of α-norm]
-    w_{t+1} = w_t  −  η · Δ_t / (ᵅ√v_t + ε)              [α-root step]
+    Δ_t = β₁ · Δ_{t-1}  +  (1 − β₁) · g_t                [1st moment]
+    v_t = β₂ · v_{t-1}  +  (1 − β₂) · |Δ_t|^α            [EMA of |·|^α]
+    w_{t+1} = w_t  −  η · Δ_t / (v_t^{1/α} + ε)
 
-Key difference from AdaGrad-OTA: v_t uses an exponential moving average
-rather than a cumulative sum, making the step size more responsive to
-recent gradient history and less sensitive to early noise impulses.
+α = 2 (default) recovers classical Adam (squared moments + square root) and
+is the AWGN setting used throughout this project. The α parameter is kept
+for generality but is not varied in the experiments.
 
-Convergence rate: O(1/T)  (Theorem 2) — faster than AdaGrad-OTA.
+The EMA second moment lets the effective per-coordinate learning rate
+contract whenever channel noise inflates |Δ_t|, providing implicit
+noise filtering without explicit channel-state information.
 """
 
 import torch
@@ -29,7 +32,7 @@ class AdamOTA:
         self,
         params: list[torch.Tensor],
         lr: float = 1e-3,
-        alpha: float = 1.5,
+        alpha: float = 2.0,
         beta1: float = 0.9,
         beta2: float = 0.3,
         eps: float = 1e-4,
@@ -38,9 +41,11 @@ class AdamOTA:
         Args:
             params: List of global model parameter tensors.
             lr:     Step size η.
-            alpha:  Tail index of interference (should match NoisyOracle.alpha).
+            alpha:  Exponent of the second-moment accumulator (default 2.0
+                    → classical Adam). Should match NoisyOracle.alpha if a
+                    non-Gaussian channel is used.
             beta1:  1st-moment decay β₁ ∈ [0, 1).
-            beta2:  2nd-moment decay β₂ ∈ (0, 1). Paper finds β₂=0.3 optimal (Fig. 4).
+            beta2:  2nd-moment decay β₂ ∈ (0, 1).
             eps:    Numerical stability ε.
         """
         self.params = list(params)
@@ -65,13 +70,13 @@ class AdamOTA:
         for p, g, delta, v in zip(self.params, agg_grads, self.Delta, self.v):
             g = g.to(p.device)
 
-            # Eq. (8): 1st moment — momentum smoothing
+            # 1st moment — momentum smoothing of the noisy aggregated gradient
             delta.mul_(self.beta1).add_(g, alpha=1.0 - self.beta1)
 
-            # Eq. (10): 2nd moment — EMA of α-th power (Adam branch)
+            # 2nd moment — EMA of |Δ|^α  (α = 2 → classical Adam)
             v.mul_(self.beta2).add_(delta.abs().pow(self.alpha), alpha=1.0 - self.beta2)
 
-            # Eq. (11): update
+            # Parameter update — α-th-root normalisation
             denom = v.pow(1.0 / self.alpha).add_(self.eps)
             p.addcdiv_(delta, denom, value=-self.lr)
 

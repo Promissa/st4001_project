@@ -1,21 +1,13 @@
 """
-Median Anchored Clipping (MAC) — robust pre-processing before the optimizer.
+Median Anchored Clipping (MAC) — optional robust pre-processor.
 
-Reference: Li et al., "Robust federated learning over the air: Combating
-heavy-tailed noise with median anchored clipping," WiOpt 2025. [Ref 2 in proposal]
+Off by default in the AWGN experiments; included for exploratory runs
+where one wants a robust-statistics safety net against rare outliers.
 
-MAC truncates extreme outliers in the OTA-aggregated gradient before they
-reach the adaptive optimizer. This is a pre-processing step applied server-side
-to g_t after OTA aggregation, before the AdaGrad/Adam update.
-
-Algorithm:
-  1. Compute coordinate-wise median m_i of the aggregated gradient g_t.
-  2. Compute coordinate-wise deviation d_i = |g_{t,i} - m_i|.
-  3. Clip: g_clipped_i = m_i + clip(g_{t,i} - m_i, -tau, +tau)
-     where tau = c * median(d_i)  for a constant c (default 3.0).
-
-This keeps the gradient anchored to its robust median estimate and removes
-impulsive outliers beyond c standard-deviation-equivalents.
+Algorithm (server-side, applied to g_t before the optimizer step):
+  1. m_i ← median of g_t coordinates.
+  2. d_i ← |g_{t,i} − m_i|.
+  3. g_clipped_i ← m_i + clip(g_{t,i} − m_i, −τ, +τ), τ = c · median(d_i).
 """
 
 import torch
