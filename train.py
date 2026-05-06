@@ -57,10 +57,10 @@ def parse_args():
     p.add_argument("--num_clients", type=int, default=10)
     p.add_argument("--local_epochs", type=int, default=5)
     p.add_argument("--batch_size", type=int, default=32)
-    p.add_argument("--server_lr", type=float, default=0.1)
+    p.add_argument("--server_lr", type=float, default=0.01)
     p.add_argument("--local_lr", type=float, default=0.01)
     p.add_argument("--momentum", type=float, default=0.9)
-    p.add_argument("--beta2", type=float, default=0.3)
+    p.add_argument("--beta2", type=float, default=0.999)
     # Channel
     p.add_argument("--alpha", type=float, default=2.0,
                    help="Stability index of the noise (2.0 = AWGN, default)")
@@ -164,8 +164,8 @@ def main():
 
         # TensorBoard logging
         if writer is not None:
-            writer.add_scalar("train/loss", loss, rnd)
-            writer.add_scalar("train/accuracy", acc, rnd)
+            writer.add_scalar("test/loss", loss, rnd)
+            writer.add_scalar("test/accuracy", acc, rnd)
 
         if rnd % args.log_every == 0 or rnd == 1:
             print(f"Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")

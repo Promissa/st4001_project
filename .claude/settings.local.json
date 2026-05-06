@@ -3,7 +3,11 @@
     "allow": [
       "Bash(unzip -p \"documents/Appendix 3 - Task plan of thesis project.docx\" word/document.xml)",
       "Bash(python3 -c \"import sys, re; t=sys.stdin.read\\(\\); t=re.sub\\(r'</w:p>', '\\\\n', t\\); t=re.sub\\(r'<[^>]+>', '', t\\); print\\(t\\)\")",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(tensorboard *)",
+      "Bash(uv pip *)",
+      "Bash(uv tool *)",
+      "Bash(/home/pr/.local/share/uv/tools/tensorboard/bin/python *)"
     ]
   }
 }
