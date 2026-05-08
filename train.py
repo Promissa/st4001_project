@@ -218,6 +218,20 @@ def main():
             amp_dtype=args.amp_dtype,
             channels_last=args.channels_last,
         )
+        if rnd == 1:
+            worker_stats = diagnostics.get("worker_stats", [])
+            shard_text = ", ".join(
+                f"{stat.get('device')}={stat.get('clients')} clients"
+                for stat in worker_stats
+            )
+            time_text = ", ".join(
+                f"{stat.get('device')} {stat.get('local_seconds', 0.0):.2f}s"
+                for stat in worker_stats
+                if "local_seconds" in stat
+            )
+            print(f"Execution: {diagnostics.get('execution_path', 'unknown')} | {shard_text}")
+            if time_text:
+                print(f"Worker time: {time_text}")
         if diagnostics["status"] != "ok":
             print(f"Stopped at round {rnd}: {diagnostics['status']}")
             break

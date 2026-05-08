@@ -179,6 +179,21 @@ def run_trial(
         if args.save_diagnostics:
             diagnostics.append({"round": rnd, **diag})
 
+        if rnd == 1:
+            worker_stats = diag.get("worker_stats", [])
+            shard_text = ", ".join(
+                f"{stat.get('device')}={stat.get('clients')} clients"
+                for stat in worker_stats
+            )
+            time_text = ", ".join(
+                f"{stat.get('device')} {stat.get('local_seconds', 0.0):.2f}s"
+                for stat in worker_stats
+                if "local_seconds" in stat
+            )
+            print(f"  execution={diag.get('execution_path', 'unknown')} | {shard_text}", flush=True)
+            if time_text:
+                print(f"  worker_time={time_text}", flush=True)
+
         if diag["status"] != "ok":
             status = diag["status"]
             failed_round = rnd

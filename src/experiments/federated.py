@@ -13,6 +13,7 @@ Round structure (one communication round t):
 
 import copy
 import math
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 import torch
@@ -260,10 +261,12 @@ def _train_client_shard(
     use_amp: bool,
     amp_dtype: str,
     channels_last: bool,
-) -> tuple[list[torch.Tensor], dict[str, torch.Tensor], int]:
+) -> tuple[list[torch.Tensor], dict[str, torch.Tensor], int, dict]:
     """Train a shard of clients on one GPU, accumulating only summed deltas."""
+    started = time.perf_counter()
     if device.type == "cuda":
         torch.cuda.set_device(device)
+        torch.cuda.reset_peak_memory_stats(device)
 
     base_model = copy.deepcopy(global_model).to(device)
     base_model = _maybe_channels_last(base_model, channels_last)
@@ -281,6 +284,8 @@ def _train_client_shard(
         if torch.is_floating_point(buf)
     }
     base_state = base_model.state_dict()
+    num_batches = 0
+    num_samples = 0
 
     for loader in loaders:
         local_model.load_state_dict(base_state)
@@ -288,6 +293,8 @@ def _train_client_shard(
 
         for _ in range(local_epochs):
             for x, y in loader:
+                num_batches += 1
+                num_samples += int(y.numel())
                 x, y = _prepare_batch(x, y, device, channels_last)
                 opt.zero_grad(set_to_none=True)
                 with _autocast(device, use_amp, amp_dtype):
@@ -304,7 +311,22 @@ def _train_client_shard(
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
-    return delta_sums, buffer_sums, len(loaders)
+        memory_allocated_mb = torch.cuda.memory_allocated(device) / (1024 ** 2)
+        peak_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
+    else:
+        memory_allocated_mb = 0.0
+        peak_memory_mb = 0.0
+
+    stats = {
+        "device": str(device),
+        "clients": len(loaders),
+        "batches": num_batches,
+        "samples": num_samples,
+        "local_seconds": time.perf_counter() - started,
+        "memory_allocated_mb": memory_allocated_mb,
+        "peak_memory_mb": peak_memory_mb,
+    }
+    return delta_sums, buffer_sums, len(loaders), stats
 
 
 def _run_round_parallel(
@@ -347,8 +369,9 @@ def _run_round_parallel(
     param_sums = [torch.zeros_like(p, device=device) for p in global_model.parameters()]
     buffer_sums: dict[str, torch.Tensor] = {}
     buffer_count = 0
+    worker_stats = []
 
-    for delta_sums, shard_buffer_sums, count in shard_results:
+    for delta_sums, shard_buffer_sums, count, stats in shard_results:
         for acc, delta_sum in zip(param_sums, delta_sums):
             acc.add_(delta_sum.to(device, non_blocking=True))
         for name, value in shard_buffer_sums.items():
@@ -356,6 +379,7 @@ def _run_round_parallel(
                 buffer_sums[name] = torch.zeros_like(value, device=device)
             buffer_sums[name].add_(value.to(device, non_blocking=True))
         buffer_count += count
+        worker_stats.append(stats)
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
@@ -368,7 +392,7 @@ def _run_round_parallel(
             noisy_sum = oracle.aggregate([param_sum])
         agg_grads.append(noisy_sum / N)
 
-    return _finalize_round(
+    diagnostics = _finalize_round(
         global_model,
         agg_grads,
         oracle,
@@ -379,6 +403,10 @@ def _run_round_parallel(
         buffer_sums=buffer_sums,
         buffer_count=buffer_count,
     )
+    if return_diagnostics and diagnostics is not None:
+        diagnostics["execution_path"] = "parallel"
+        diagnostics["worker_stats"] = worker_stats
+    return diagnostics
 
 
 def run_round(
@@ -470,7 +498,7 @@ def run_round(
         noisy_sum = oracle.aggregate(list(param_grads))
         agg_grads.append(noisy_sum / N)
 
-    return _finalize_round(
+    diagnostics = _finalize_round(
         global_model,
         agg_grads,
         oracle,
@@ -481,6 +509,13 @@ def run_round(
         buffer_sums=buffer_sums,
         buffer_count=len(all_buffers),
     )
+    if return_diagnostics and diagnostics is not None:
+        diagnostics["execution_path"] = "sequential"
+        diagnostics["worker_stats"] = [{
+            "device": str(device),
+            "clients": len(client_loaders),
+        }]
+    return diagnostics
 
 
 def evaluate(

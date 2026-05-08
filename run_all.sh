@@ -25,6 +25,7 @@ ROUNDS="${ROUNDS:-200}"
 ABLATION_ROUNDS="${ABLATION_ROUNDS:-100}"
 LOCAL_EPOCHS="${LOCAL_EPOCHS:-5}"
 BATCH_SIZE="${BATCH_SIZE:-128}"
+MNIST_BATCH_SIZE="${MNIST_BATCH_SIZE:-512}"
 COMPARE_BATCH_SIZE="${COMPARE_BATCH_SIZE:-64}"
 SERVER_LR="${SERVER_LR:-0.01}"
 COMPARE_SERVER_LR="${COMPARE_SERVER_LR:-0.1}"
@@ -120,6 +121,8 @@ train_mnist() {
     --optimizer adagrad_ota \
     --rounds 100 \
     --num_clients 10 \
+    --local_epochs "$LOCAL_EPOCHS" \
+    --batch_size "$MNIST_BATCH_SIZE" \
     --alpha 2.0 \
     --noise_scale "$NOISE_SCALE" \
     --save_results \
