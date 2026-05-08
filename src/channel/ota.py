@@ -55,10 +55,18 @@ class NoisyOracle:
         Returns:
             Noisy aggregated gradient g_t (not yet divided by N — caller normalizes).
         """
-        N = len(gradients)
         stacked = torch.stack(gradients)  # (N, *param_shape)
         aggregated = stacked.sum(dim=0)
+        return self.aggregate_sum(aggregated)
 
+    def aggregate_sum(self, aggregated: torch.Tensor) -> torch.Tensor:
+        """
+        Add channel noise to an already summed client update tensor.
+
+        This is equivalent to aggregate(client_gradients) after the noiseless
+        sum has been computed elsewhere, and is used by the AutoDL fast path to
+        avoid materialising every client tensor on the server GPU.
+        """
         if self.noise_scale == 0:
             xi = torch.zeros_like(aggregated, device=self.device)
         else:

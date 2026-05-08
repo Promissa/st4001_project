@@ -30,7 +30,7 @@ from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
-from .federated import run_round, evaluate
+from .federated import run_round, evaluate, resolve_devices
 
 
 DEFAULT_ALPHAS = [1.1, 1.3, 1.5, 1.7, 1.9, 2.0]
@@ -90,7 +90,13 @@ def _make_loaders(args, seed: int):
         subsets = iid_partition(train_ds, args.num_clients, seed=seed)
 
     client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
-    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0)
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=args.eval_batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+    )
     return client_loaders, test_loader
 
 
@@ -129,12 +135,20 @@ def run_trial(
     use_mac: bool,
     args,
     device: torch.device,
+    worker_devices: list[torch.device],
 ) -> dict:
     set_seed(seed)
     client_loaders, test_loader = _make_loaders(args, seed)
 
     set_seed(seed)
     model = get_model(args.model, num_classes=10).to(device)
+    if args.channels_last:
+        model = model.to(memory_format=torch.channels_last)
+    if args.compile_model:
+        if args.client_parallel == "off":
+            model = torch.compile(model)
+        else:
+            print("compile_model ignored with client_parallel=auto; use --client_parallel off to enable it.")
     oracle = NoisyOracle(alpha=alpha, noise_scale=args.noise_scale, device=device)
     opt = build_optimizer(method, model, args, alpha)
 
@@ -155,6 +169,11 @@ def run_trial(
             mac_clip=args.mac_clip,
             device=device,
             return_diagnostics=True,
+            worker_devices=worker_devices,
+            client_parallel=args.client_parallel,
+            use_amp=args.amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.channels_last,
         )
 
         if args.save_diagnostics:
@@ -165,7 +184,14 @@ def run_trial(
             failed_round = rnd
             break
 
-        loss, acc = evaluate(model, test_loader, device)
+        loss, acc = evaluate(
+            model,
+            test_loader,
+            device,
+            use_amp=args.amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.channels_last,
+        )
         if not math.isfinite(loss) or not math.isfinite(acc):
             status = "nonfinite_eval"
             failed_round = rnd
@@ -206,7 +232,7 @@ def run_trial(
     return result
 
 
-def run_alpha_ablation(args, device: torch.device) -> dict:
+def run_alpha_ablation(args, device: torch.device, worker_devices: list[torch.device]) -> dict:
     print("\n=== Heavy-tail ablation: alpha-stable tail index ===")
     results = {}
     for alpha in args.alphas:
@@ -216,7 +242,7 @@ def run_alpha_ablation(args, device: torch.device) -> dict:
             runs = []
             for seed in args.seeds:
                 print(f"\nalpha={alpha_key} method={method} seed={seed}", flush=True)
-                runs.append(run_trial(method, alpha, seed, False, args, device))
+                runs.append(run_trial(method, alpha, seed, False, args, device, worker_devices))
             results[alpha_key][method] = {
                 "runs": runs,
                 "summary": _summary(runs),
@@ -224,7 +250,7 @@ def run_alpha_ablation(args, device: torch.device) -> dict:
     return results
 
 
-def run_mac_compare(args, device: torch.device) -> dict:
+def run_mac_compare(args, device: torch.device, worker_devices: list[torch.device]) -> dict:
     print("\n=== Robust pre-processing: MAC vs no-MAC ===")
     results = {"no_mac": {}, "mac": {}}
     for use_mac, key in [(False, "no_mac"), (True, "mac")]:
@@ -232,7 +258,7 @@ def run_mac_compare(args, device: torch.device) -> dict:
             runs = []
             for seed in args.seeds:
                 print(f"\n{key} alpha={args.mac_alpha:g} method={method} seed={seed}", flush=True)
-                runs.append(run_trial(method, args.mac_alpha, seed, use_mac, args, device))
+                runs.append(run_trial(method, args.mac_alpha, seed, use_mac, args, device, worker_devices))
             results[key][method] = {
                 "runs": runs,
                 "summary": _summary(runs),
@@ -278,13 +304,38 @@ def parse_args():
     p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--save_diagnostics", action="store_true", default=False)
     p.add_argument("--out_dir", type=str, default="results/heavytail")
+    p.add_argument("--devices", type=str, default="0,1",
+                   help="Comma-separated visible CUDA device ids")
+    p.add_argument("--client_parallel", choices=["auto", "off"], default="auto")
+    p.add_argument("--amp", dest="amp", action="store_true", default=None)
+    p.add_argument("--no_amp", dest="amp", action="store_false")
+    p.add_argument("--amp_dtype", choices=["bf16", "fp16"], default="bf16")
+    p.add_argument("--channels_last", dest="channels_last", action="store_true",
+                   default=None)
+    p.add_argument("--no_channels_last", dest="channels_last", action="store_false")
+    p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--compile_model", action="store_true", default=False)
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device} | Config: {vars(args)}")
+    worker_devices = resolve_devices(args.devices)
+    device = worker_devices[0]
+    if args.amp is None:
+        args.amp = device.type == "cuda"
+    if args.channels_last is None:
+        args.channels_last = (
+            device.type == "cuda"
+            and args.dataset == "cifar10"
+            and args.model in ("resnet18", "resnet34", "convnet")
+        )
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+        torch.set_float32_matmul_precision("high")
+
+    print(f"Device: {device} | Workers: {[str(d) for d in worker_devices]} | Config: {vars(args)}")
 
     out_dir = Path(args.out_dir)
     common = {
@@ -295,11 +346,11 @@ if __name__ == "__main__":
     }
 
     if args.study in ("alpha", "both"):
-        results = run_alpha_ablation(args, device)
+        results = run_alpha_ablation(args, device, worker_devices)
         path = out_dir / f"alpha_ablation_{args.dataset}_{args.model}.json"
         _write_json(path, {**common, "study": "alpha", "results": results})
 
     if args.study in ("mac", "both"):
-        results = run_mac_compare(args, device)
+        results = run_mac_compare(args, device, worker_devices)
         path = out_dir / f"mac_compare_{args.dataset}_{args.model}_alpha{args.mac_alpha:g}.json"
         _write_json(path, {**common, "study": "mac", "results": results})

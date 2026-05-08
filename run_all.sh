@@ -39,6 +39,12 @@ MAC_ALPHA="${MAC_ALPHA:-1.3}"
 MAC_CLIP="${MAC_CLIP:-3.0}"
 NOISE_SCALE="${NOISE_SCALE:-0.05}"
 DIR_CONC="${DIR_CONC:-0.1}"
+DEVICES="${DEVICES:-0,1}"
+CLIENT_PARALLEL="${CLIENT_PARALLEL:-auto}"
+AMP="${AMP:-1}"
+AMP_DTYPE="${AMP_DTYPE:-bf16}"
+CHANNELS_LAST="${CHANNELS_LAST:-auto}"
+EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-1024}"
 
 COMPARISON_DIR="${COMPARISON_DIR:-results/comparison}"
 ABLATION_DIR="${ABLATION_DIR:-results/ablation}"
@@ -50,6 +56,26 @@ GENERATED_TEX_DIR="${GENERATED_TEX_DIR:-template/data/generated}"
 run_cmd() {
   printf '\n==> %s\n' "$*"
   "$@"
+}
+
+build_accelerator_flags() {
+  ACCELERATOR_FLAGS=(
+    --devices "$DEVICES"
+    --client_parallel "$CLIENT_PARALLEL"
+    --amp_dtype "$AMP_DTYPE"
+    --eval_batch_size "$EVAL_BATCH_SIZE"
+  )
+
+  if [[ "$AMP" == "0" || "$AMP" == "false" ]]; then
+    ACCELERATOR_FLAGS+=(--no_amp)
+  else
+    ACCELERATOR_FLAGS+=(--amp)
+  fi
+
+  case "$CHANNELS_LAST" in
+    1|true|yes) ACCELERATOR_FLAGS+=(--channels_last) ;;
+    0|false|no) ACCELERATOR_FLAGS+=(--no_channels_last) ;;
+  esac
 }
 
 setup() {
@@ -64,6 +90,7 @@ data() {
 }
 
 train_cifar() {
+  build_accelerator_flags
   run_cmd uv run train.py \
     --dataset cifar10 \
     --model resnet18 \
@@ -81,10 +108,12 @@ train_cifar() {
     --non_iid \
     --dir_conc "$DIR_CONC" \
     --save_results \
-    --out_dir "$SINGLE_DIR"
+    --out_dir "$SINGLE_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 train_mnist() {
+  build_accelerator_flags
   run_cmd uv run train.py \
     --dataset mnist \
     --model mlp \
@@ -94,7 +123,8 @@ train_mnist() {
     --alpha 2.0 \
     --noise_scale "$NOISE_SCALE" \
     --save_results \
-    --out_dir "$SINGLE_DIR"
+    --out_dir "$SINGLE_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 train() {
@@ -200,6 +230,7 @@ quickcheck() {
 }
 
 alpha_sanity() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.heavy_tail --study alpha \
     --dataset mnist \
     --model mlp \
@@ -217,10 +248,12 @@ alpha_sanity() {
     --methods "adagrad_ota,adam_ota" \
     --log_every 1 \
     --save_diagnostics \
-    --out_dir "$HEAVYTAIL_DIR/sanity"
+    --out_dir "$HEAVYTAIL_DIR/sanity" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 alpha_ablation() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.heavy_tail --study alpha \
     --dataset "$DATASET" \
     --model "$MODEL" \
@@ -237,10 +270,12 @@ alpha_ablation() {
     --seeds "$SEEDS" \
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$HEAVYTAIL_DIR"
+    --out_dir "$HEAVYTAIL_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 mac_compare() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.heavy_tail --study mac \
     --dataset "$DATASET" \
     --model "$MODEL" \
@@ -258,7 +293,8 @@ mac_compare() {
     --seeds "$SEEDS" \
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$HEAVYTAIL_DIR"
+    --out_dir "$HEAVYTAIL_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 paper_update() {

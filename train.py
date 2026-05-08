@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 
 from src.channel.ota import NoisyOracle
 from src.data.datasets import get_dataset, iid_partition, dirichlet_partition, make_loader
-from src.experiments.federated import run_round, evaluate
+from src.experiments.federated import run_round, evaluate, resolve_devices
 from src.models.nets import get_model
 from src.optimizers.adagrad_ota import AdaGradOTA
 from src.optimizers.adam_ota import AdamOTA
@@ -90,6 +90,23 @@ def parse_args():
     p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--save_results", action="store_true")
     p.add_argument("--out_dir", type=str, default="results/single")
+    # AutoDL / accelerator controls
+    p.add_argument("--devices", type=str, default="0,1",
+                   help="Comma-separated visible CUDA device ids, e.g. 0,1")
+    p.add_argument("--client_parallel", choices=["auto", "off"], default="auto",
+                   help="Use one client shard per CUDA device when possible")
+    p.add_argument("--amp", dest="amp", action="store_true", default=None,
+                   help="Enable CUDA mixed precision for local/eval passes")
+    p.add_argument("--no_amp", dest="amp", action="store_false",
+                   help="Disable CUDA mixed precision")
+    p.add_argument("--amp_dtype", choices=["bf16", "fp16"], default="bf16")
+    p.add_argument("--channels_last", dest="channels_last", action="store_true",
+                   default=None, help="Use channels-last memory format")
+    p.add_argument("--no_channels_last", dest="channels_last", action="store_false",
+                   help="Disable channels-last memory format")
+    p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--compile_model", action="store_true", default=False,
+                   help="Optionally torch.compile the global model in sequential mode")
     # TensorBoard
     p.add_argument("--use_tensorboard", action="store_true", default=True,
                    help="Enable TensorBoard logging")
@@ -101,12 +118,22 @@ def parse_args():
 def main():
     args = parse_args()
     set_seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    devices = resolve_devices(args.devices)
+    device = devices[0]
+    if args.amp is None:
+        args.amp = device.type == "cuda"
+    if args.channels_last is None:
+        args.channels_last = (
+            device.type == "cuda"
+            and args.dataset == "cifar10"
+            and args.model in ("resnet18", "resnet34", "convnet")
+        )
 
     # Enable cuDNN autotuner for better convolution performance
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
+        torch.set_float32_matmul_precision("high")
 
     # TensorBoard writer
     writer = None
@@ -133,15 +160,22 @@ def main():
             "noise_scale": args.noise_scale,
             "use_mac": args.use_mac,
             "mac_clip": args.mac_clip,
+            "devices": args.devices,
+            "client_parallel": args.client_parallel,
+            "amp": args.amp,
+            "amp_dtype": args.amp_dtype,
+            "channels_last": args.channels_last,
         }
         writer.add_hparams(hparams, {"hparam/best_accuracy": 0.0})
 
     print(f"Device:    {device}")
+    print(f"Workers:   {', '.join(str(d) for d in devices)} | client_parallel={args.client_parallel}")
     print(f"Optimizer: {args.optimizer.upper()}")
     print(f"Dataset:   {args.dataset} | Model: {args.model}")
     print(f"Noise:     α={args.alpha}, scale={args.noise_scale}")
     print(f"Clients:   N={args.num_clients} | Non-IID: {args.non_iid} (Dir={args.dir_conc})")
     print(f"MAC:       {args.use_mac}")
+    print(f"AMP:       {args.amp} ({args.amp_dtype}) | channels_last={args.channels_last}")
     print()
 
     # Data
@@ -152,10 +186,18 @@ def main():
     else:
         subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
     client_loaders = [make_loader(s, args.batch_size) for s in subsets]
-    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0, pin_memory=True)
+    test_loader = DataLoader(test_ds, batch_size=args.eval_batch_size,
+                             shuffle=False, num_workers=0, pin_memory=True)
 
     # Model, oracle, optimizer
     model = get_model(args.model).to(device)
+    if args.channels_last:
+        model = model.to(memory_format=torch.channels_last)
+    if args.compile_model:
+        if args.client_parallel == "off":
+            model = torch.compile(model)
+        else:
+            print("compile_model ignored with client_parallel=auto; use --client_parallel off to enable it.")
     oracle = NoisyOracle(alpha=args.alpha, noise_scale=args.noise_scale, device=device)
     opt = build_optimizer(args.optimizer, model, args)
 
@@ -170,11 +212,21 @@ def main():
             mac_clip=args.mac_clip,
             device=device,
             return_diagnostics=True,
+            worker_devices=devices,
+            client_parallel=args.client_parallel,
+            use_amp=args.amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.channels_last,
         )
         if diagnostics["status"] != "ok":
             print(f"Stopped at round {rnd}: {diagnostics['status']}")
             break
-        loss, acc = evaluate(model, test_loader, device)
+        loss, acc = evaluate(
+            model, test_loader, device,
+            use_amp=args.amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.channels_last,
+        )
         if not np.isfinite(loss) or not np.isfinite(acc):
             print(f"Stopped at round {rnd}: nonfinite_eval")
             break
