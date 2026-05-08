@@ -1,22 +1,19 @@
 """
-Adam-OTA: server-side Adam update applied to the OTA-aggregated gradient.
+Adam-OTA: stable server-side Adam for OTA-aggregated gradients.
 
-The server receives a noisy aggregated gradient g_t each round and applies
-a momentum-smoothed, second-moment-normalised step with bias correction:
+This project is an empirical validation framework, not a strict line-by-line
+paper reproduction. For the heavy-tail experiments, we use a numerically
+stable Adam-style server update:
 
-    Δ_t = β₁ · Δ_{t-1}  +  (1 − β₁) · g_t                [1st moment]
-    v_t = β₂ · v_{t-1}  +  (1 − β₂) · |Δ_t|^α            [EMA of |·|^α]
-    Δ̂_t = Δ_t / (1 − β₁^t)                              [bias-corrected]
-    v̂_t = v_t / (1 − β₂^t)                              [bias-corrected]
-    w_{t+1} = w_t  −  η · Δ̂_t / (v̂_t^{1/α} + ε)
+    m_t = β₁ · m_{t-1}  +  (1 − β₁) · g_t
+    v_t = β₂ · v_{t-1}  +  (1 − β₂) · |g_t|^α
+    m_hat = m_t / (1 − β₁^t)
+    v_hat = v_t / (1 − β₂^t)
+    w_{t+1} = w_t  −  η · m_hat / (v_hat^{1/α} + ε)
 
-α = 2 (default) with β₂ = 0.999, ε = 1e-8 recovers classical Adam exactly
-(Kingma & Ba, 2015) — this is the AWGN setting used throughout this project.
-The α parameter is kept for generality but is not varied in the experiments.
-
-The bias-corrected EMA second moment lets the effective per-coordinate
-learning rate contract whenever channel noise inflates |Δ_t|, providing
-implicit noise filtering without explicit channel-state information.
+When α = 2, this recovers classical Adam applied at the server. When α < 2,
+the denominator follows the fractional alpha-stable accumulator used by the
+heavy-tail experiments.
 """
 
 import torch
@@ -58,7 +55,7 @@ class AdamOTA:
         self.eps = eps
 
         self.t = 0
-        self.Delta = [torch.zeros_like(p) for p in self.params]
+        self.m = [torch.zeros_like(p) for p in self.params]
         self.v = [torch.zeros_like(p) for p in self.params]
 
     @torch.no_grad()
@@ -73,25 +70,24 @@ class AdamOTA:
         self.t += 1
         bc1 = 1.0 - self.beta1 ** self.t
         bc2 = 1.0 - self.beta2 ** self.t
-        step_size = self.lr / bc1
 
-        for p, g, delta, v in zip(self.params, agg_grads, self.Delta, self.v):
+        for p, g, m, v in zip(self.params, agg_grads, self.m, self.v):
             g = g.to(p.device)
 
             # 1st moment — momentum smoothing of the noisy aggregated gradient
-            delta.mul_(self.beta1).add_(g, alpha=1.0 - self.beta1)
+            m.mul_(self.beta1).add_(g, alpha=1.0 - self.beta1)
 
-            # 2nd moment — EMA of |Δ|^α  (α = 2 → classical Adam)
-            v.mul_(self.beta2).add_(delta.abs().pow(self.alpha), alpha=1.0 - self.beta2)
+            # 2nd moment — EMA of |g|^α  (α = 2 → classical Adam)
+            v.mul_(self.beta2).add_(g.abs().pow(self.alpha), alpha=1.0 - self.beta2)
 
-            # Bias-corrected α-th-root denominator
-            denom = (v / bc2).pow_(1.0 / self.alpha).add_(self.eps)
+            # Bias correction keeps the first rounds numerically stable.
+            m_hat = m / bc1
+            denom = (v / bc2).pow(1.0 / self.alpha).add_(self.eps)
 
-            # Parameter update — bias correction folded into step_size = lr / bc1
-            p.addcdiv_(delta, denom, value=-step_size)
+            p.addcdiv_(m_hat, denom, value=-self.lr)
 
     def zero(self):
         self.t = 0
-        for d, v in zip(self.Delta, self.v):
-            d.zero_()
+        for m, v in zip(self.m, self.v):
+            m.zero_()
             v.zero_()

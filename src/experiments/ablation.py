@@ -22,8 +22,10 @@ Usage:
 
 import argparse
 import json
+import random
 from pathlib import Path
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -38,6 +40,14 @@ from .federated import run_round, evaluate
 
 NOISE_SCALES = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
 CLIENT_VALUES = [5, 10, 20, 50, 100]
+
+
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def _build_optimizer(name: str, model: torch.nn.Module, args) -> object:
@@ -66,15 +76,17 @@ def _run_single(
     optimizer_name: str = "adam_ota",
 ) -> dict:
     """Run one configuration, return {"loss": [...], "acc": [...]}."""
+    set_seed(args.seed)
     train_ds, test_ds = get_dataset(dataset_name)
     client_subsets = dirichlet_partition(train_ds, num_clients,
-                                         concentration=args.dir_conc)
+                                         concentration=args.dir_conc,
+                                         seed=args.seed)
     client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=2)
 
     oracle = NoisyOracle(alpha=args.alpha, noise_scale=noise_scale, device=device)
 
-    torch.manual_seed(args.seed)
+    set_seed(args.seed)
     model = get_model(model_name, num_classes=10).to(device)
     opt = _build_optimizer(optimizer_name, model, args)
 

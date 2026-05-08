@@ -1,0 +1,35 @@
+\centerline{\xiaoyi\bfseries Abstract}
+\vspace{4em}
+
+Federated learning enables distributed model training without moving raw
+client data, but conventional digital aggregation requires communication
+resources that grow with the number of participating clients. Analog
+over-the-air federated learning (OTA-FL) addresses this bottleneck by
+letting client updates superpose directly in the wireless multiple-access
+channel. The same physical superposition that makes OTA-FL scalable also
+injects channel noise and impulsive interference into the aggregated update.
+This is especially challenging when the interference is heavy-tailed: rare
+large perturbations can dominate a server update and destabilize plain
+FedAvg-style training.
+
+This thesis studies a PyTorch simulation framework for adaptive federated
+learning over the air under symmetric alpha-stable interference. The AWGN
+case is treated as the special case $\alpha=2$, while $\alpha<2$ models
+heavier-tailed channel perturbations. The central hypothesis is that
+server-side adaptive optimizers, especially AdaGrad-OTA and Adam-OTA, act as
+implicit channel-noise filters: when the noisy aggregate has large
+coordinate-wise magnitude, the fractional second-moment accumulator increases
+and the effective learning rate automatically contracts.
+
+The framework implements FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, and Adam-OTA;
+modular dataset partitioning; a noisy OTA aggregation oracle based on the
+Chambers-Mallows-Stuck alpha-stable sampler; Median Anchored Clipping (MAC)
+as robust pre-processing; JSON result export; and plotting scripts. The
+revised experiments prioritize CIFAR-10 tail-index ablations and MAC
+comparisons, with MNIST used as a lightweight sanity benchmark. The project
+is not a full line-by-line reproduction of the reference paper, but it
+implements the core heavy-tail setting needed to evaluate whether adaptive
+server normalization improves OTA-FL robustness.
+
+\noindent\textbf{Keywords:} federated learning; over-the-air aggregation;
+alpha-stable noise; heavy-tailed interference; adaptive optimization; MAC

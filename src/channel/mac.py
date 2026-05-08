@@ -1,8 +1,8 @@
 """
 Median Anchored Clipping (MAC) — optional robust pre-processor.
 
-Off by default in the AWGN experiments; included for exploratory runs
-where one wants a robust-statistics safety net against rare outliers.
+Off by default, and enabled explicitly in the MAC comparison. It provides a
+robust-statistics safety net against rare heavy-tailed outliers.
 
 Algorithm (server-side, applied to g_t before the optimizer step):
   1. m_i ← median of g_t coordinates.

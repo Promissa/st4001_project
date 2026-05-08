@@ -1,0 +1,74 @@
+\chapter{Background and Related Work}
+
+\section{Federated Learning}
+Federated learning considers the optimization of a global model over data
+distributed across multiple clients. If client $n$ owns local data
+$\mathcal{D}_n$, the global objective can be written as
+\begin{equation}
+    \min_w F(w) =
+    \sum_{n=1}^{N} p_n F_n(w),
+    \quad
+    F_n(w) =
+    \frac{1}{|\mathcal{D}_n|}
+    \sum_{(x,y)\in\mathcal{D}_n}
+    \ell(w;x,y),
+\end{equation}
+where $p_n$ is often proportional to the local data size. FedAvg trains this
+objective by alternating between local client optimization and server-side
+averaging \citep{mcmahan2017communication}. The method is simple and
+communication efficient compared with fully synchronous distributed SGD, but
+it still requires explicit client uploads in each round.
+
+\section{Analog Over-the-Air Aggregation}
+OTA-FL replaces separate digital uploads with analog aggregation in the
+wireless channel. In an idealized channel, simultaneous client transmissions
+sum at the receiver, so the server observes an aggregate update directly.
+This property makes the required multiple-access resource less sensitive to
+the number of clients. However, the observed aggregate is noisy. A simplified
+channel model is
+\begin{equation}
+    y_t = \sum_{n=1}^{N} \Delta_{n,t} + \xi_t,
+\end{equation}
+and the server uses $\tilde{g}_t = y_t/N$ as the update direction. In the
+AWGN special case, $\xi_t \sim \mathcal{N}(0,\sigma^2 I)$. In the heavier
+channel model used by this project, $\xi_t$ follows a symmetric
+alpha-stable distribution.
+
+The original adaptive OTA-FL paper includes more general channel effects,
+including fading coefficients and symmetric alpha-stable interference
+\citep{wang2024adaptive}. This project does not implement fading or explicit
+power-control mechanisms, but it does include the alpha-stable interference
+axis. This is the key step beyond an AWGN-only simulator because
+alpha-stable noise captures rare but large impulsive channel perturbations.
+
+\section{Adaptive Gradient Methods}
+Adaptive optimizers normalize the update direction using historical gradient
+statistics. AdaGrad accumulates squared gradients and gives each coordinate a
+learning rate inversely proportional to the square root of its accumulated
+magnitude \citep{duchi2011adaptive}. Adam combines first-moment smoothing,
+second-moment exponential averaging, and bias correction
+\citep{kingma2015adam}. In centralized learning, these mechanisms are usually
+motivated by sparse gradients, noisy mini-batches, and heterogeneous
+coordinate scales.
+
+In OTA-FL, the same mechanisms have an additional interpretation. If channel
+noise makes the aggregate update unusually large in some coordinate, the
+second-moment state for that coordinate increases. The denominator of the
+adaptive update then becomes larger, reducing the effective step size. This
+creates an implicit feedback loop from observed noisy update magnitude to
+server learning rate. The project tests whether this feedback loop is visible
+in training curves and ablation studies.
+
+\section{Positioning Relative to the Reference Paper}
+The reference paper proposes adaptive federated learning over the air and
+studies AdaGrad-like and Adam-like server updates with theoretical analysis
+under alpha-stable interference \citep{wang2024adaptive}. It evaluates
+multiple image and character classification tasks and includes studies over
+tail index, client count, and data heterogeneity.
+
+The present project uses that paper as the conceptual source but narrows the
+deliverable. The implemented framework supports the core OTA-FL training loop,
+alpha-stable noise based on the Chambers-Mallows-Stuck method
+\citep{chambers1976method}, MAC robust pre-processing, and adaptive server
+optimizers. The main evidence is the alpha tail-index ablation, with AWGN
+reported as the $\alpha=2$ endpoint rather than the whole scope.

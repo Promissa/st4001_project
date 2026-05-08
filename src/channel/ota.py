@@ -1,12 +1,12 @@
 """
-Analog Over-the-Air (A-OTA) aggregation — the "Noisy Oracle".
+Analog Over-the-Air (A-OTA) aggregation - the "Noisy Oracle".
 
 Models gradient aggregation with additive channel noise:
-    g_t = (1/N) * sum_n ∇f_n(w_t)  +  ξ_t
+    g_t = (1/N) * sum_n grad f_n(w_t) + xi_t
 
-By default ξ_t is i.i.d. AWGN (alpha = 2). Setting alpha < 2 yields
-symmetric α-stable interference; the experiments in this project use
-the AWGN setting throughout.
+alpha=2 gives AWGN. alpha<2 gives symmetric alpha-stable heavy-tailed
+interference, which is the core channel setting for the heavy-tail
+experiments.
 """
 
 import torch
@@ -36,6 +36,13 @@ class NoisyOracle:
         self.alpha = alpha
         self.noise_scale = noise_scale
         self.device = device
+        self.begin_round()
+
+    def begin_round(self) -> None:
+        """Reset per-round diagnostic statistics."""
+        self.round_noise_sq = 0.0
+        self.round_noise_max_abs = 0.0
+        self.round_noise_finite = True
 
     def aggregate(self, gradients: list[torch.Tensor]) -> torch.Tensor:
         """
@@ -52,13 +59,39 @@ class NoisyOracle:
         stacked = torch.stack(gradients)  # (N, *param_shape)
         aggregated = stacked.sum(dim=0)
 
-        xi = sample_alpha_stable(
-            alpha=self.alpha,
-            size=aggregated.shape,
-            scale=self.noise_scale,
-            device=self.device,
-        )
+        if self.noise_scale == 0:
+            xi = torch.zeros_like(aggregated, device=self.device)
+        else:
+            xi = sample_alpha_stable(
+                alpha=self.alpha,
+                size=aggregated.shape,
+                scale=self.noise_scale,
+                device=self.device,
+            )
+            xi = xi.to(dtype=aggregated.dtype, device=aggregated.device)
+
+        xi_finite = torch.isfinite(xi).all().item()
+        self.round_noise_finite = self.round_noise_finite and bool(xi_finite)
+        if xi_finite:
+            xi_float = xi.detach().float()
+            self.round_noise_sq += float(xi_float.pow(2).sum().item())
+            self.round_noise_max_abs = max(
+                self.round_noise_max_abs,
+                float(xi_float.abs().max().item()) if xi_float.numel() else 0.0,
+            )
+        else:
+            self.round_noise_sq = float("inf")
+            self.round_noise_max_abs = float("inf")
+
         return aggregated + xi
+
+    def diagnostics(self) -> dict[str, float | bool]:
+        """Return per-round noise diagnostics collected during aggregation."""
+        return {
+            "noise_norm": self.round_noise_sq ** 0.5,
+            "noise_max_abs": self.round_noise_max_abs,
+            "noise_finite": self.round_noise_finite,
+        }
 
     def __repr__(self) -> str:
         return f"NoisyOracle(alpha={self.alpha}, noise_scale={self.noise_scale})"

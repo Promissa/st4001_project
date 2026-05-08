@@ -1,6 +1,6 @@
 """
 Comparative analysis: run all four server-side optimizers under identical
-AWGN-OTA conditions and record per-round test accuracy / training loss.
+OTA channel conditions and record per-round test accuracy / training loss.
 
   1. FedAvg-OTA    (plain SGD server, no momentum)
   2. FedAvgM-OTA   (momentum SGD server) — primary baseline
@@ -19,8 +19,10 @@ import argparse
 import copy
 import json
 import os
+import random
 from pathlib import Path
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -31,6 +33,14 @@ from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
 from .federated import run_round, evaluate
+
+
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def build_optimizer(name: str, model: torch.nn.Module, args) -> object:
@@ -55,14 +65,16 @@ def run_comparison(args) -> dict:
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    set_seed(args.seed)
 
     # --- Data (shared across all methods) ---
     train_ds, test_ds = get_dataset(args.dataset)
     if args.non_iid:
         client_subsets = dirichlet_partition(train_ds, args.num_clients,
-                                             concentration=args.dir_conc)
+                                             concentration=args.dir_conc,
+                                             seed=args.seed)
     else:
-        client_subsets = iid_partition(train_ds, args.num_clients)
+        client_subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
 
     client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=2)
@@ -82,7 +94,7 @@ def run_comparison(args) -> dict:
         print(f"{'='*50}")
 
         # Fresh model (same init for all methods via fixed seed)
-        torch.manual_seed(args.seed)
+        set_seed(args.seed)
         model = get_model(args.model, num_classes=10).to(device)
         opt = build_optimizer(method, model, args)
 
@@ -128,7 +140,7 @@ def parse_args():
     p.add_argument("--use_mac", action="store_true", default=False,
                    help="Apply Median Anchored Clipping pre-processing")
     p.add_argument("--mac_clip", type=float, default=3.0)
-    p.add_argument("--log_every", type=int, default=10)
+    p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out_dir", type=str, default="results/comparison")
     return p.parse_args()

@@ -29,6 +29,9 @@ def sample_alpha_stable(
     if not (0 < alpha <= 2):
         raise ValueError(f"alpha must be in (0, 2], got {alpha}")
 
+    if scale == 0:
+        return torch.zeros(size, device=device, dtype=torch.float32)
+
     if alpha == 2:
         # Gaussian special case: scale maps to std = sqrt(2) * gamma
         return torch.randn(size, device=device, dtype=torch.float32) * (scale * (2 ** 0.5))

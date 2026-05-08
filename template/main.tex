@@ -1,0 +1,48 @@
+% 编译命令：xelatex main.tex
+
+\documentclass[filled]{zjuthesis}% 填入filled参数，自动填写Checklist表格相关信息
+\begin{document}
+
+\zju{
+    title = {Adaptive Federated Learning Over the Air},
+    name = {Peiran Wei},
+    id = {3220111228},
+    supervisor = {Hao Yang},
+    class of year = {2026},
+    major = {ECE},
+    submission date = {2026.05.22},
+    Academic title = {Assistant Professor},
+}
+
+\maketitle
+
+\frontmatter
+
+\Checklist
+\Commitment
+
+{\doublespacing
+\include{data/ack}
+\include{data/abstract}}
+
+\tableofcontents
+
+\mainmatter
+
+\include{data/chap1}
+\include{data/chap2}
+\include{data/chap3}
+\include{data/chap4}
+\include{data/chap5}
+
+% 使用bib方式插入参考文献，
+\include{data/ref-bib}
+
+% 直接插入参考文献，
+% \include{data/ref}
+
+\include{data/appendix}
+\include{data/biography}
+
+
+\end{document}

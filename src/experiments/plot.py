@@ -179,6 +179,103 @@ def plot_ablation_clients(result_path: str, out_dir: Path):
     plt.close()
 
 
+def _summary_mean_std(block: dict, metric: str) -> tuple[float | None, float | None]:
+    summary = block.get("summary", {})
+    stats = summary.get(metric, {})
+    return stats.get("mean"), stats.get("std")
+
+
+def plot_alpha_ablation(result_path: str, out_dir: Path):
+    """
+    Final accuracy vs alpha-stable tail index alpha.
+    Smaller alpha means heavier-tailed channel interference.
+    """
+    with open(result_path) as f:
+        data = json.load(f)
+
+    results = data["results"]
+    alphas = sorted(float(k) for k in results)
+
+    _set_style()
+    fig, ax = plt.subplots(1, 1, figsize=(7, 4.8))
+
+    for opt_name, style in OPT_STYLE.items():
+        means, stds, xs = [], [], []
+        for alpha in alphas:
+            block = results[str(alpha)].get(opt_name)
+            if not block:
+                continue
+            mean, std = _summary_mean_std(block, "final_acc")
+            if mean is None:
+                continue
+            xs.append(alpha)
+            means.append(mean)
+            stds.append(std or 0.0)
+        if xs:
+            ax.errorbar(xs, means, yerr=stds, label=style["label"],
+                        color=style["color"], marker=style["marker"],
+                        lw=2, capsize=3)
+
+    ax.set_xlabel(r"Tail index $\alpha$ (2.0 = AWGN)")
+    ax.set_ylabel("Final Test Accuracy")
+    ax.set_title("Effect of Alpha-Stable Interference")
+    ax.xaxis.set_major_locator(mticker.FixedLocator(alphas))
+    ax.legend()
+    ax.grid(alpha=0.3)
+
+    plt.tight_layout()
+    stem = Path(result_path).stem
+    out = out_dir / f"{stem}_plot.png"
+    plt.savefig(out, bbox_inches="tight")
+    print(f"Saved: {out}")
+    plt.close()
+
+
+def plot_mac_compare(result_path: str, out_dir: Path):
+    """Bar chart comparing no-MAC and MAC final accuracy."""
+    with open(result_path) as f:
+        data = json.load(f)
+
+    results = data["results"]
+    methods = [method for method in OPT_STYLE if method in results.get("no_mac", {})]
+    labels = [OPT_STYLE[m]["label"] for m in methods]
+    x = np.arange(len(methods))
+    width = 0.36
+
+    def series(key: str):
+        means, stds = [], []
+        for method in methods:
+            mean, std = _summary_mean_std(results[key][method], "final_acc")
+            means.append(mean if mean is not None else 0.0)
+            stds.append(std if std is not None else 0.0)
+        return means, stds
+
+    no_mac_mean, no_mac_std = series("no_mac")
+    mac_mean, mac_std = series("mac")
+
+    _set_style()
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4.8))
+    ax.bar(x - width / 2, no_mac_mean, width, yerr=no_mac_std,
+           label="No MAC", color="#9e9e9e", capsize=3)
+    ax.bar(x + width / 2, mac_mean, width, yerr=mac_std,
+           label="MAC", color="#4c78a8", capsize=3)
+
+    alpha = data["args"].get("mac_alpha", "?")
+    gamma = data["args"].get("noise_scale", "?")
+    ax.set_ylabel("Final Test Accuracy")
+    ax.set_title(rf"MAC vs No-MAC ($\alpha$={alpha}, $\gamma$={gamma})")
+    ax.set_xticks(x, labels, rotation=12, ha="right")
+    ax.legend()
+    ax.grid(alpha=0.25, axis="y")
+
+    plt.tight_layout()
+    stem = Path(result_path).stem
+    out = out_dir / f"{stem}_plot.png"
+    plt.savefig(out, bbox_inches="tight")
+    print(f"Saved: {out}")
+    plt.close()
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="Plot ADOTA-FL experiment results")
     p.add_argument("--result", type=str, default=None,
@@ -187,6 +284,10 @@ def parse_args():
                    help="Path to noise-scale ablation JSON")
     p.add_argument("--ablation_clients", type=str, default=None,
                    help="Path to client-count ablation JSON")
+    p.add_argument("--alpha_ablation", type=str, default=None,
+                   help="Path to alpha-stable ablation JSON")
+    p.add_argument("--mac_compare", type=str, default=None,
+                   help="Path to MAC comparison JSON")
     p.add_argument("--out_dir", type=str, default="results/figures")
     return p.parse_args()
 
@@ -202,6 +303,16 @@ if __name__ == "__main__":
         plot_ablation_noise(args.ablation_noise, out_dir)
     if args.ablation_clients:
         plot_ablation_clients(args.ablation_clients, out_dir)
+    if args.alpha_ablation:
+        plot_alpha_ablation(args.alpha_ablation, out_dir)
+    if args.mac_compare:
+        plot_mac_compare(args.mac_compare, out_dir)
 
-    if not any([args.result, args.ablation_noise, args.ablation_clients]):
-        print("No input specified. Use --result, --ablation_noise, or --ablation_clients.")
+    if not any([
+        args.result,
+        args.ablation_noise,
+        args.ablation_clients,
+        args.alpha_ablation,
+        args.mac_compare,
+    ]):
+        print("No input specified. Use --result, --ablation_noise, --ablation_clients, --alpha_ablation, or --mac_compare.")

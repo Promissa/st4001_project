@@ -1,0 +1,80 @@
+\chapter{Introduction}
+
+\section{Motivation}
+Federated learning (FL) trains a shared model across distributed clients
+without requiring the clients to upload their raw data. This design is
+attractive for edge intelligence because it reduces privacy exposure and
+keeps data near the devices that generate it. A standard FL round broadcasts
+the current global model, lets clients run local optimization, and aggregates
+their local updates on a central server. The FedAvg algorithm is the classic
+example of this workflow and remains the baseline for many FL systems
+\citep{mcmahan2017communication}.
+
+The communication cost of conventional digital FL grows with the number of
+clients because each participating client must send an update to the server.
+Analog over-the-air aggregation changes the communication model. If clients
+transmit analog update waveforms at the same time, the wireless
+multiple-access channel physically superposes the signals. The server can
+then observe an aggregate update in one shared channel use instead of
+decoding each client separately. This makes OTA-FL a promising architecture
+for large-scale wireless learning.
+
+The difficulty is that the same wireless channel also injects noise,
+interference, and possible fading. The server therefore receives a corrupted
+aggregate rather than the exact average update. When a plain FedAvg-style
+server update uses this noisy vector directly, heavy-tailed impulsive
+interference can cause slow convergence, oscillation, or divergence. The
+reference work ``Adaptive Federated Learning Over the Air'' studies this
+problem for adaptive methods under fading and alpha-stable interference
+\citep{wang2024adaptive}. This project follows that direction by making the
+alpha-stable tail index a core experimental variable; AWGN is treated as the
+special case $\alpha=2$.
+
+\section{Problem Statement}
+This thesis studies FL over a simulated analog OTA aggregation channel.
+At communication round $t$, the server receives a noisy aggregate
+\begin{equation}
+    \tilde{g}_t =
+    \frac{1}{N}\left(\sum_{n=1}^{N} \Delta_{n,t} + \xi_t\right),
+\end{equation}
+where $N$ is the number of clients, $\Delta_{n,t}$ is the update produced by
+client $n$, and $\xi_t$ is symmetric alpha-stable channel noise. Smaller
+$\alpha$ means heavier tails and more frequent impulsive outliers; $\alpha=2$
+recovers the Gaussian AWGN case. The central question is whether adaptive
+server optimizers can use their historical first- and second-moment states to
+make the training process more robust to this noisy aggregate.
+
+The project should not be presented as a complete reproduction of
+\citet{wang2024adaptive}. The original paper contains a full convergence
+analysis and a broader experimental suite. The current codebase implements an
+empirical simulator for the core heavy-tail mechanism: alpha-stable OTA
+aggregation, adaptive server updates, and robust MAC pre-processing. Its
+contribution is a controlled, reproducible software validation rather than a
+new theoretical optimizer.
+
+\section{Contributions}
+The contributions of this project are as follows.
+\begin{itemize}
+    \item A modular PyTorch simulator for OTA-FL with noisy analog
+    aggregation, local client training, server-side optimization, logging,
+    result export, and plotting.
+    \item Implementations of FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, and
+    Adam-OTA as server-side optimizers that consume the OTA-aggregated
+    update.
+    \item Alpha-stable tail-index ablations that test how OTA-FL behaves as
+    the channel changes from AWGN at $\alpha=2$ to heavier-tailed
+    interference at $\alpha<2$.
+    \item A MAC versus no-MAC comparison under heavy-tailed interference,
+    testing whether robust pre-processing complements adaptive server
+    normalization.
+    \item A lightweight one-dimensional theory sketch explaining why
+    second-moment accumulation can induce automatic step-size shrinkage under
+    impulsive channel noise.
+\end{itemize}
+
+\section{Thesis Organization}
+Chapter 2 reviews FL, OTA aggregation, adaptive optimization, and the
+relationship between this project and the reference paper. Chapter 3
+describes the implemented system model and optimizer equations. Chapter 4
+presents the datasets, experimental settings, generated plots, and numerical
+results. Chapter 5 summarizes the outcome, limitations, and future work.

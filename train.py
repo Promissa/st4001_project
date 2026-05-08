@@ -1,7 +1,8 @@
 """
-ADOTA-FL — single-run training entry point.
+ADOTA-FL - single-run training entry point.
 
-Trains a global model under simulated Analog-OTA aggregation with AWGN.
+Trains a global model under simulated Analog-OTA aggregation. alpha=2 is
+AWGN; alpha<2 enables alpha-stable heavy-tailed interference.
 For comparative analysis and ablation studies use the dedicated runners:
 
     uv run -m src.experiments.compare
@@ -16,8 +17,10 @@ Usage:
 
 import argparse
 import json
+import random
 from pathlib import Path
 
+import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
@@ -29,6 +32,14 @@ from src.models.nets import get_model
 from src.optimizers.adagrad_ota import AdaGradOTA
 from src.optimizers.adam_ota import AdamOTA
 from src.optimizers.baselines import FedAvgOTA, FedAvgMOTA
+
+
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def build_optimizer(name: str, model, args):
@@ -70,13 +81,13 @@ def parse_args():
     p.add_argument("--non_iid", action="store_true",
                    help="Use Dirichlet non-IID partition (Dir=0.1)")
     p.add_argument("--dir_conc", type=float, default=0.1)
-    # Optional robust pre-processing (off by default; AWGN setting)
+    # Optional robust pre-processing (useful for heavy-tailed interference)
     p.add_argument("--use_mac", action="store_true", default=False,
                    help="Apply Median Anchored Clipping before the optimizer")
     p.add_argument("--mac_clip", type=float, default=3.0)
     # Misc
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--log_every", type=int, default=10)
+    p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--save_results", action="store_true")
     p.add_argument("--out_dir", type=str, default="results/single")
     # TensorBoard
@@ -89,7 +100,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    torch.manual_seed(args.seed)
+    set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Enable cuDNN autotuner for better convolution performance
@@ -136,9 +147,10 @@ def main():
     # Data
     train_ds, test_ds = get_dataset(args.dataset)
     if args.non_iid:
-        subsets = dirichlet_partition(train_ds, args.num_clients, args.dir_conc)
+        subsets = dirichlet_partition(train_ds, args.num_clients, args.dir_conc,
+                                      seed=args.seed)
     else:
-        subsets = iid_partition(train_ds, args.num_clients)
+        subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
     client_loaders = [make_loader(s, args.batch_size) for s in subsets]
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0, pin_memory=True)
 
@@ -150,15 +162,22 @@ def main():
     loss_hist, acc_hist = [], []
 
     for rnd in range(1, args.rounds + 1):
-        run_round(
+        diagnostics = run_round(
             model, client_loaders, oracle, opt,
             local_epochs=args.local_epochs,
             local_lr=args.local_lr,
             use_mac=args.use_mac,
             mac_clip=args.mac_clip,
             device=device,
+            return_diagnostics=True,
         )
+        if diagnostics["status"] != "ok":
+            print(f"Stopped at round {rnd}: {diagnostics['status']}")
+            break
         loss, acc = evaluate(model, test_loader, device)
+        if not np.isfinite(loss) or not np.isfinite(acc):
+            print(f"Stopped at round {rnd}: nonfinite_eval")
+            break
         loss_hist.append(loss)
         acc_hist.append(acc)
 
@@ -170,7 +189,10 @@ def main():
         if rnd % args.log_every == 0 or rnd == 1:
             print(f"Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
 
-    print(f"\nFinal  | Loss: {loss_hist[-1]:.4f} | Acc: {acc_hist[-1]:.4f}")
+    if loss_hist:
+        print(f"\nFinal  | Loss: {loss_hist[-1]:.4f} | Acc: {acc_hist[-1]:.4f}")
+    else:
+        print("\nFinal  | No finite evaluation was produced.")
 
     if writer is not None:
         writer.close()
@@ -181,7 +203,14 @@ def main():
         fname = (f"{args.dataset}_{args.model}_{args.optimizer}"
                  f"_alpha{args.alpha}_N{args.num_clients}.json")
         with open(out_dir / fname, "w") as f:
-            json.dump({"args": vars(args), "loss": loss_hist, "acc": acc_hist}, f, indent=2)
+            json.dump({
+                "args": vars(args),
+                "loss": loss_hist,
+                "acc": acc_hist,
+                "final_acc": acc_hist[-1] if acc_hist else None,
+                "best_acc": max(acc_hist) if acc_hist else None,
+                "nonfinite": not bool(acc_hist),
+            }, f, indent=2)
         print(f"Results saved to {out_dir / fname}")
 
 

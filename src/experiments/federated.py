@@ -12,12 +12,42 @@ Round structure (one communication round t):
 """
 
 import copy
+import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from ..channel.ota import NoisyOracle
 from ..channel.mac import apply_mac
+
+
+def _list_norm(tensors: list[torch.Tensor]) -> float:
+    total = 0.0
+    for tensor in tensors:
+        value = float(tensor.detach().float().pow(2).sum().item())
+        total += value
+    return math.sqrt(total)
+
+
+def _list_max_abs(tensors: list[torch.Tensor]) -> float:
+    max_abs = 0.0
+    for tensor in tensors:
+        if tensor.numel():
+            max_abs = max(max_abs, float(tensor.detach().float().abs().max().item()))
+    return max_abs
+
+
+def _list_finite(tensors: list[torch.Tensor]) -> bool:
+    return all(bool(torch.isfinite(tensor).all().item()) for tensor in tensors)
+
+
+def _optimizer_state_tensors(server_opt) -> list[torch.Tensor]:
+    tensors = []
+    for name in ("m", "v", "Delta", "buf"):
+        value = getattr(server_opt, name, None)
+        if isinstance(value, list):
+            tensors.extend([tensor for tensor in value if isinstance(tensor, torch.Tensor)])
+    return tensors
 
 
 def local_grad(
@@ -82,7 +112,8 @@ def run_round(
     use_mac: bool = False,
     mac_clip: float = 3.0,
     device: torch.device = torch.device("cpu"),
-) -> None:
+    return_diagnostics: bool = False,
+) -> dict | None:
     """
     Execute one FL communication round, updating global_model in-place.
 
@@ -96,8 +127,11 @@ def run_round(
         use_mac:        Whether to apply Median Anchored Clipping before optimizer.
         mac_clip:       MAC clipping constant c (τ = c * median deviation).
         device:         Compute device.
+        return_diagnostics: Return per-round finite checks and norms.
     """
     N = len(client_loaders)
+    if hasattr(oracle, "begin_round"):
+        oracle.begin_round()
 
     # Step 2: client local updates (in practice parallel; simulated sequentially)
     client_updates = [
@@ -117,8 +151,60 @@ def run_round(
     if use_mac:
         agg_grads = apply_mac(agg_grads, clip_factor=mac_clip)
 
+    agg_finite = _list_finite(agg_grads)
+    diagnostics = {
+        "status": "ok" if agg_finite else "nonfinite_aggregate",
+        "agg_finite": agg_finite,
+        "agg_norm": _list_norm(agg_grads) if agg_finite else float("inf"),
+        "agg_max_abs": _list_max_abs(agg_grads) if agg_finite else float("inf"),
+        "use_mac": use_mac,
+    }
+    if hasattr(oracle, "diagnostics"):
+        diagnostics.update(oracle.diagnostics())
+
+    if not agg_finite:
+        if return_diagnostics:
+            return diagnostics
+        raise FloatingPointError("Non-finite OTA aggregate encountered.")
+
+    old_params = None
+    if return_diagnostics:
+        old_params = [p.detach().clone() for p in global_model.parameters()]
+
     # Step 5: server-side adaptive update
     server_opt.step(agg_grads)
+
+    model_tensors = [p.detach() for p in global_model.parameters()]
+    state_tensors = _optimizer_state_tensors(server_opt)
+    model_finite = _list_finite(model_tensors)
+    opt_finite = _list_finite(state_tensors) if state_tensors else True
+    diagnostics["model_finite"] = model_finite
+    diagnostics["optimizer_finite"] = opt_finite
+    if not model_finite:
+        diagnostics["status"] = "nonfinite_model"
+    elif not opt_finite:
+        diagnostics["status"] = "nonfinite_optimizer"
+
+    if old_params is not None:
+        updates = [
+            old - new.detach()
+            for old, new in zip(old_params, global_model.parameters())
+        ]
+        diagnostics["update_norm"] = _list_norm(updates)
+        diagnostics["update_to_agg_norm"] = (
+            diagnostics["update_norm"] / diagnostics["agg_norm"]
+            if diagnostics["agg_norm"] > 0 and math.isfinite(diagnostics["agg_norm"])
+            else 0.0
+        )
+        adaptive_state = getattr(server_opt, "v", None)
+        if isinstance(adaptive_state, list) and _list_finite(adaptive_state):
+            diagnostics["v_norm"] = _list_norm(adaptive_state)
+            diagnostics["v_max_abs"] = _list_max_abs(adaptive_state)
+
+    if not model_finite or not opt_finite:
+        if return_diagnostics:
+            return diagnostics
+        raise FloatingPointError("Non-finite model or optimizer state encountered.")
 
     # Keep floating buffers (e.g. BatchNorm running stats) in sync with client models.
     # Without this, ResNet evaluation uses stale normalization statistics from round 0.
@@ -131,6 +217,8 @@ def run_round(
                     [client_buffers[name].to(global_buf.device) for client_buffers in all_buffers]
                 ).mean(dim=0)
                 global_buf.copy_(averaged)
+
+    return diagnostics if return_diagnostics else None
 
 
 def evaluate(

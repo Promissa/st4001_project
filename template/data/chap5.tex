@@ -1,0 +1,40 @@
+\chapter{Conclusion and Future Work}
+
+\section{Conclusion}
+This thesis presents an empirical framework for adaptive federated learning
+over the air under alpha-stable channel interference. The project is
+motivated by the tension between OTA-FL's communication scalability and its
+noisy aggregation channel. The implemented system tests whether server-side
+adaptive optimization can act as an implicit, CSI-free noise-mitigation
+mechanism through its fractional second-moment accumulator.
+
+The completed AWGN endpoint experiments show that this mechanism is useful
+but not universally dominant. On MNIST, AdaGrad-OTA and Adam-OTA achieve the
+best controlled-comparison accuracies, reaching 93.05\% and 93.46\%
+respectively. On CIFAR-10, FedAvgM-OTA is the strongest method in the
+200-round AWGN comparison, with 64.42\% final accuracy, while AdaGrad-OTA and
+Adam-OTA still improve over plain FedAvg-OTA. This motivates the revised
+heavy-tail experiments: the core claim should be evaluated under
+alpha-stable impulsive interference, not only under the Gaussian endpoint.
+
+The main output is therefore not a complete theoretical proof or a full
+reproduction of all experiments in the reference paper. Instead, the output
+is a working PyTorch simulator, alpha-stable tail-index experiments, MAC
+robustness comparisons, and a set of figures and JSON logs that support a
+carefully scoped adaptive OTA-FL robustness claim.
+
+\section{Limitations}
+The project remains narrower than the full reference paper in three main
+ways. First, it provides only a toy theoretical explanation and points to the
+reference paper for the complete non-convex convergence proof. Second, the
+wireless channel is still a simulation oracle and does not model mobility,
+multi-cell interference, synchronization, CSI acquisition, or power control.
+Third, the project does not include a software-defined-radio or real wireless
+testbed validation.
+
+\section{Future Work}
+Future extensions can make the project closer to a full wireless learning
+system by adding richer channel dynamics, studying mobility and power-control
+effects, and evaluating the method on a real software-defined-radio testbed.
+A theoretical extension could replace the toy analysis with a complete
+project-specific proof for the implemented optimizer variants.

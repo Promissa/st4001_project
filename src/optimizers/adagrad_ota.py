@@ -8,8 +8,9 @@ per-coordinate AdaGrad-style update:
     v_t  = v_{t-1}  +  |Δ_t|^α                        [accumulated |·|^α]
     w_{t+1} = w_t  −  η · Δ_t / (v_t^{1/α} + ε)
 
-α = 2 (default) recovers classical AdaGrad; that is the AWGN setting used
-throughout this project. β₁ = 0 turns off momentum smoothing.
+α = 2 (default) recovers classical AdaGrad at the AWGN endpoint. α < 2 uses
+the fractional accumulator for alpha-stable heavy-tailed interference. β₁ = 0
+turns off momentum smoothing.
 
 The accumulator v_t grows whenever channel noise inflates |Δ_t|, so the
 effective per-coordinate learning rate contracts — providing implicit

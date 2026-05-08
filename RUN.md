@@ -135,7 +135,11 @@ uv run -m src.experiments.compare \
 
 ---
 
-## 4. Ablation Studies (`ablation.py`)
+## 4. Legacy AWGN Ablation Studies (`ablation.py`)
+
+These commands are kept for traceability. They are no longer the main thesis
+evidence because the revised core experiment is the alpha-stable tail-index
+sweep in Section 5.
 
 ### A. Noise-Scale Ablation (`gamma` sweep)
 
@@ -189,55 +193,70 @@ uv run -m src.experiments.ablation --study both \
 
 ---
 
-## 5. Heavy-Tailed Noise (`alpha < 2`)
+## 5. Core Heavy-Tailed Experiments (`heavy_tail.py`)
 
-To test non-Gaussian channels, reduce the stability index `alpha`.
+The revised thesis core is alpha-stable interference. `alpha=2.0` is AWGN;
+smaller values are heavier-tailed.
 
-### Single run with heavy-tailed noise
+### A. Fractional-alpha sanity check
 
 ```bash
-uv run train.py \
+./run_all.sh alpha_sanity
+```
+
+This runs a tiny MNIST job at `alpha=1.1` and `alpha=1.3` to check for
+NaN/inf before spending compute on CIFAR-10.
+
+### B. CIFAR-10 alpha ablation
+
+```bash
+uv run -m src.experiments.heavy_tail --study alpha \
   --dataset cifar10 \
   --model resnet18 \
-  --optimizer adam_ota \
-  --alpha 1.5 \
-  --noise_scale 0.05 \
-  --rounds 200 \
+  --rounds 100 \
   --num_clients 100 \
-  --non_iid \
-  --beta2 0.999
+  --local_epochs 1 \
+  --server_lr 0.01 \
+  --noise_scale 0.05 \
+  --alphas 1.1,1.3,1.5,1.7,1.9,2.0 \
+  --seeds 42,43,44 \
+  --methods fedavg,fedavgm,adagrad_ota,adam_ota \
+  --out_dir results/heavytail
 ```
 
-### Full comparison under heavy-tailed noise
+Equivalent shortcut:
 
 ```bash
-uv run -m src.experiments.compare \
+./run_all.sh alpha_ablation
+```
+
+### C. MAC vs no-MAC
+
+```bash
+uv run -m src.experiments.heavy_tail --study mac \
   --dataset cifar10 \
   --model resnet18 \
-  --alpha 1.5 \
-  --noise_scale 0.05 \
-  --rounds 200 \
+  --rounds 100 \
   --num_clients 100 \
-  --beta2 0.999
+  --local_epochs 1 \
+  --server_lr 0.01 \
+  --noise_scale 0.05 \
+  --mac_alpha 1.3 \
+  --mac_clip 3.0 \
+  --seeds 42,43,44 \
+  --methods fedavg,fedavgm,adagrad_ota,adam_ota \
+  --out_dir results/heavytail
 ```
 
-### Alpha sweep for thesis analysis
-
-Run comparisons at multiple tail indices:
+Equivalent shortcut:
 
 ```bash
-for alpha in 1.5 1.8 2.0; do
-  uv run -m src.experiments.compare \
-    --dataset cifar10 \
-    --model resnet18 \
-    --alpha $alpha \
-    --noise_scale 0.05 \
-    --rounds 200 \
-    --num_clients 100 \
-    --beta2 0.999 \
-    --out_dir results/comparison
-done
+./run_all.sh mac_compare
 ```
+
+**Output:**
+- `results/heavytail/alpha_ablation_cifar10_resnet18.json`
+- `results/heavytail/mac_compare_cifar10_resnet18_alpha1.3.json`
 
 ---
 
@@ -266,6 +285,30 @@ uv run -m src.experiments.plot \
   --ablation_clients results/ablation/ablation_clients_cifar10_resnet18.json
 ```
 
+### Alpha Ablation and MAC Figures
+
+```bash
+uv run -m src.experiments.plot \
+  --alpha_ablation results/heavytail/alpha_ablation_cifar10_resnet18.json \
+  --mac_compare results/heavytail/mac_compare_cifar10_resnet18_alpha1.3.json \
+  --out_dir results/figures
+```
+
+### Generated LaTeX Tables
+
+```bash
+uv run -m src.experiments.report \
+  --alpha_ablation results/heavytail/alpha_ablation_cifar10_resnet18.json \
+  --mac_compare results/heavytail/mac_compare_cifar10_resnet18_alpha1.3.json \
+  --out_dir template/data/generated
+```
+
+Shortcut:
+
+```bash
+./run_all.sh paper_update
+```
+
 ### Plot All at Once
 
 ```bash
@@ -273,6 +316,8 @@ uv run -m src.experiments.plot \
   --result results/comparison/cifar10_resnet18_alpha2.0_N100.json \
   --ablation_noise results/ablation/ablation_noise_cifar10_resnet18.json \
   --ablation_clients results/ablation/ablation_clients_cifar10_resnet18.json \
+  --alpha_ablation results/heavytail/alpha_ablation_cifar10_resnet18.json \
+  --mac_compare results/heavytail/mac_compare_cifar10_resnet18_alpha1.3.json \
   --out_dir results/figures
 ```
 
@@ -282,38 +327,16 @@ uv run -m src.experiments.plot \
 
 ## 7. Recommended Full Workflow
 
-Run these in order to produce the complete result set for a thesis:
+Run this to produce the revised thesis core result set:
 
 ```bash
-# 1. Core comparison under AWGN (alpha = 2.0)
-uv run -m src.experiments.compare \
-  --dataset cifar10 \
-  --model resnet18 \
-  --rounds 200 \
-  --num_clients 100 \
-  --beta2 0.999
+./run_all.sh core_heavytail
+```
 
-# 2. Core comparison under heavy-tailed noise (alpha = 1.5)
-uv run -m src.experiments.compare \
-  --dataset cifar10 \
-  --model resnet18 \
-  --alpha 1.5 \
-  --rounds 200 \
-  --num_clients 100 \
-  --beta2 0.999
+For a shorter compute check:
 
-# 3. Ablation sweeps (noise scale + client count)
-uv run -m src.experiments.ablation --study both \
-  --dataset cifar10 \
-  --model resnet18 \
-  --rounds 100 \
-  --beta2 0.999
-
-# 4. Generate all figures
-uv run -m src.experiments.plot \
-  --result results/comparison/cifar10_resnet18_alpha2.0_N100.json \
-  --ablation_noise results/ablation/ablation_noise_cifar10_resnet18.json \
-  --ablation_clients results/ablation/ablation_clients_cifar10_resnet18.json
+```bash
+ABLATION_ROUNDS=2 SEEDS=42 ALPHA_VALUES=1.3,2.0 METHODS=adagrad_ota,adam_ota ./run_all.sh core_heavytail
 ```
 
 ---
@@ -325,4 +348,6 @@ uv run -m src.experiments.plot \
 | `train.py` | `results/single/*.json`, `runs/*/` (TensorBoard) |
 | `compare.py` | `results/comparison/<dataset>_<model>_alpha<alpha>_N<N>.json` |
 | `ablation.py` | `results/ablation/ablation_noise_*.json`, `results/ablation/ablation_clients_*.json` |
+| `heavy_tail.py` | `results/heavytail/alpha_ablation_*.json`, `results/heavytail/mac_compare_*.json` |
 | `plot.py` | `results/figures/*.png` |
+| `report.py` | `template/data/generated/*.tex` |
