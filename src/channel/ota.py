@@ -38,11 +38,43 @@ class NoisyOracle:
         self.device = device
         self.begin_round()
 
-    def begin_round(self) -> None:
+    def begin_round(self, collect_diagnostics: bool = False) -> None:
         """Reset per-round diagnostic statistics."""
+        self.collect_diagnostics = collect_diagnostics
         self.round_noise_sq = 0.0
         self.round_noise_max_abs = 0.0
         self.round_noise_finite = True
+
+    def aggregate_sum(self, aggregated: torch.Tensor) -> torch.Tensor:
+        """Add OTA channel noise to an already summed client update tensor."""
+        if self.noise_scale == 0:
+            if self.collect_diagnostics:
+                self.round_noise_sq += 0.0
+                self.round_noise_max_abs = max(self.round_noise_max_abs, 0.0)
+            return aggregated
+
+        xi = sample_alpha_stable(
+            alpha=self.alpha,
+            size=aggregated.shape,
+            scale=self.noise_scale,
+            device=aggregated.device,
+        ).to(dtype=aggregated.dtype)
+
+        if self.collect_diagnostics:
+            xi_finite = torch.isfinite(xi).all().item()
+            self.round_noise_finite = self.round_noise_finite and bool(xi_finite)
+            if xi_finite:
+                xi_float = xi.detach().float()
+                self.round_noise_sq += float(xi_float.pow(2).sum().item())
+                self.round_noise_max_abs = max(
+                    self.round_noise_max_abs,
+                    float(xi_float.abs().max().item()) if xi_float.numel() else 0.0,
+                )
+            else:
+                self.round_noise_sq = float("inf")
+                self.round_noise_max_abs = float("inf")
+
+        return aggregated + xi
 
     def aggregate(self, gradients: list[torch.Tensor]) -> torch.Tensor:
         """
@@ -55,35 +87,9 @@ class NoisyOracle:
         Returns:
             Noisy aggregated gradient g_t (not yet divided by N — caller normalizes).
         """
-        N = len(gradients)
         stacked = torch.stack(gradients)  # (N, *param_shape)
         aggregated = stacked.sum(dim=0)
-
-        if self.noise_scale == 0:
-            xi = torch.zeros_like(aggregated, device=self.device)
-        else:
-            xi = sample_alpha_stable(
-                alpha=self.alpha,
-                size=aggregated.shape,
-                scale=self.noise_scale,
-                device=self.device,
-            )
-            xi = xi.to(dtype=aggregated.dtype, device=aggregated.device)
-
-        xi_finite = torch.isfinite(xi).all().item()
-        self.round_noise_finite = self.round_noise_finite and bool(xi_finite)
-        if xi_finite:
-            xi_float = xi.detach().float()
-            self.round_noise_sq += float(xi_float.pow(2).sum().item())
-            self.round_noise_max_abs = max(
-                self.round_noise_max_abs,
-                float(xi_float.abs().max().item()) if xi_float.numel() else 0.0,
-            )
-        else:
-            self.round_noise_sq = float("inf")
-            self.round_noise_max_abs = float("inf")
-
-        return aggregated + xi
+        return self.aggregate_sum(aggregated)
 
     def diagnostics(self) -> dict[str, float | bool]:
         """Return per-round noise diagnostics collected during aggregation."""

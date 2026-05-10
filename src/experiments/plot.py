@@ -53,13 +53,12 @@ def plot_comparison(result_path: str, out_dir: Path):
 
     args_d = data["args"]
     results = data["results"]
-    rounds = list(range(1, args_d["rounds"] + 1))
-
     _set_style()
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
     for method, hist in results.items():
         s = METHOD_STYLE.get(method, {"label": method, "color": "gray", "ls": "-", "lw": 1.5})
+        rounds = hist.get("eval_rounds") or list(range(1, len(hist["acc"]) + 1))
         ax1.plot(rounds, hist["acc"], label=s["label"], color=s["color"],
                  ls=s["ls"], lw=s["lw"])
         ax2.plot(rounds, hist["loss"], label=s["label"], color=s["color"],

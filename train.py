@@ -26,7 +26,22 @@ from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 
 from src.channel.ota import NoisyOracle
-from src.data.datasets import get_dataset, iid_partition, dirichlet_partition, make_loader
+from src.data.datasets import (
+    get_dataset,
+    iid_partition,
+    dirichlet_partition,
+    make_loader,
+    make_fast_cifar10_loaders,
+    make_fast_cifar10_eval_loader,
+)
+from src.experiments.accelerate import (
+    add_accelerator_args,
+    accelerator_summary,
+    configure_model,
+    resolve_accelerator_args,
+    should_collect_diagnostics,
+    should_evaluate,
+)
 from src.experiments.federated import run_round, evaluate
 from src.models.nets import get_model
 from src.optimizers.adagrad_ota import AdaGradOTA
@@ -95,6 +110,7 @@ def parse_args():
                    help="Enable TensorBoard logging")
     p.add_argument("--log_dir", type=str, default="runs",
                    help="TensorBoard log directory")
+    add_accelerator_args(p)
     return p.parse_args()
 
 
@@ -102,6 +118,7 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    resolve_accelerator_args(args, device)
 
     # Enable cuDNN autotuner for better convolution performance
     if torch.cuda.is_available():
@@ -142,6 +159,7 @@ def main():
     print(f"Noise:     α={args.alpha}, scale={args.noise_scale}")
     print(f"Clients:   N={args.num_clients} | Non-IID: {args.non_iid} (Dir={args.dir_conc})")
     print(f"MAC:       {args.use_mac}")
+    print(accelerator_summary(args))
     print()
 
     # Data
@@ -151,17 +169,29 @@ def main():
                                       seed=args.seed)
     else:
         subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
-    client_loaders = [make_loader(s, args.batch_size) for s in subsets]
-    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0, pin_memory=True)
+    if args.use_fast_data:
+        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+    else:
+        client_loaders = [make_loader(s, args.batch_size) for s in subsets]
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
 
     # Model, oracle, optimizer
-    model = get_model(args.model).to(device)
+    model = configure_model(get_model(args.model), args, device)
     oracle = NoisyOracle(alpha=args.alpha, noise_scale=args.noise_scale, device=device)
     opt = build_optimizer(args.optimizer, model, args)
 
     loss_hist, acc_hist = [], []
+    eval_rounds = []
 
     for rnd in range(1, args.rounds + 1):
+        need_diag = should_collect_diagnostics(rnd, args)
         diagnostics = run_round(
             model, client_loaders, oracle, opt,
             local_epochs=args.local_epochs,
@@ -169,25 +199,41 @@ def main():
             use_mac=args.use_mac,
             mac_clip=args.mac_clip,
             device=device,
-            return_diagnostics=True,
+            return_diagnostics=need_diag,
+            use_amp=args.use_amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.use_channels_last,
         )
-        if diagnostics["status"] != "ok":
+        if diagnostics is not None and diagnostics["status"] != "ok":
             print(f"Stopped at round {rnd}: {diagnostics['status']}")
             break
-        loss, acc = evaluate(model, test_loader, device)
-        if not np.isfinite(loss) or not np.isfinite(acc):
-            print(f"Stopped at round {rnd}: nonfinite_eval")
-            break
-        loss_hist.append(loss)
-        acc_hist.append(acc)
+        evaluated = should_evaluate(rnd, args.rounds, args)
+        if evaluated:
+            loss, acc = evaluate(
+                model,
+                test_loader,
+                device,
+                use_amp=args.use_amp,
+                amp_dtype=args.amp_dtype,
+                channels_last=args.use_channels_last,
+            )
+            if not np.isfinite(loss) or not np.isfinite(acc):
+                print(f"Stopped at round {rnd}: nonfinite_eval")
+                break
+            loss_hist.append(loss)
+            acc_hist.append(acc)
+            eval_rounds.append(rnd)
 
-        # TensorBoard logging
-        if writer is not None:
-            writer.add_scalar("test/loss", loss, rnd)
-            writer.add_scalar("test/accuracy", acc, rnd)
+            # TensorBoard logging
+            if writer is not None:
+                writer.add_scalar("test/loss", loss, rnd)
+                writer.add_scalar("test/accuracy", acc, rnd)
 
         if rnd % args.log_every == 0 or rnd == 1:
-            print(f"Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+            if evaluated:
+                print(f"Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+            else:
+                print(f"Round {rnd:4d}/{args.rounds} | Eval: skipped")
 
     if loss_hist:
         print(f"\nFinal  | Loss: {loss_hist[-1]:.4f} | Acc: {acc_hist[-1]:.4f}")
@@ -205,6 +251,7 @@ def main():
         with open(out_dir / fname, "w") as f:
             json.dump({
                 "args": vars(args),
+                "eval_rounds": eval_rounds,
                 "loss": loss_hist,
                 "acc": acc_hist,
                 "final_acc": acc_hist[-1] if acc_hist else None,

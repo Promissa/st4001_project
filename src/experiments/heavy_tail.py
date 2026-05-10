@@ -26,11 +26,26 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..channel.ota import NoisyOracle
-from ..data.datasets import get_dataset, dirichlet_partition, iid_partition, make_loader
+from ..data.datasets import (
+    get_dataset,
+    dirichlet_partition,
+    iid_partition,
+    make_loader,
+    make_fast_cifar10_loaders,
+    make_fast_cifar10_eval_loader,
+)
 from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
+from .accelerate import (
+    add_accelerator_args,
+    accelerator_summary,
+    configure_model,
+    resolve_accelerator_args,
+    should_collect_diagnostics,
+    should_evaluate,
+)
 from .federated import run_round, evaluate
 
 
@@ -90,8 +105,18 @@ def _make_loaders(args, seed: int):
     else:
         subsets = iid_partition(train_ds, args.num_clients, seed=seed)
 
-    client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
-    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=0)
+    if args.use_fast_data:
+        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+    else:
+        client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
     return client_loaders, test_loader
 
 
@@ -155,6 +180,15 @@ def _payload_matches_current_config(payload: dict, args) -> bool:
         "local_epochs",
         "batch_size",
         "non_iid",
+        "eval_every",
+        "eval_batch_size",
+        "fast_data",
+        "use_fast_data",
+        "amp",
+        "amp_dtype",
+        "channels_last",
+        "use_amp",
+        "use_channels_last",
     ]
     float_keys = [
         "server_lr",
@@ -236,16 +270,23 @@ def run_trial(
     client_loaders, test_loader = _make_loaders(args, seed)
 
     set_seed(seed)
-    model = get_model(args.model, num_classes=10).to(device)
+    model = configure_model(get_model(args.model, num_classes=10), args, device)
     oracle = NoisyOracle(alpha=alpha, noise_scale=args.noise_scale, device=device)
     opt = build_optimizer(method, model, args, alpha)
 
     loss_hist, acc_hist = [], []
+    eval_rounds = []
     diagnostics = []
     status = "ok"
     failed_round = None
+    completed_round = 0
 
     for rnd in range(1, args.rounds + 1):
+        need_diag = should_collect_diagnostics(
+            rnd,
+            args,
+            save_diagnostics=args.save_diagnostics,
+        )
         diag = run_round(
             model,
             client_loaders,
@@ -256,34 +297,55 @@ def run_trial(
             use_mac=use_mac,
             mac_clip=args.mac_clip,
             device=device,
-            return_diagnostics=True,
+            return_diagnostics=need_diag,
+            use_amp=args.use_amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.use_channels_last,
         )
 
-        if args.save_diagnostics:
+        completed_round = rnd
+        if args.save_diagnostics and diag is not None:
             diagnostics.append({"round": rnd, **diag})
 
-        if diag["status"] != "ok":
+        if diag is not None and diag["status"] != "ok":
             status = diag["status"]
             failed_round = rnd
             break
 
-        loss, acc = evaluate(model, test_loader, device)
-        if not math.isfinite(loss) or not math.isfinite(acc):
-            status = "nonfinite_eval"
-            failed_round = rnd
-            break
+        evaluated = should_evaluate(rnd, args.rounds, args)
+        if evaluated:
+            loss, acc = evaluate(
+                model,
+                test_loader,
+                device,
+                use_amp=args.use_amp,
+                amp_dtype=args.amp_dtype,
+                channels_last=args.use_channels_last,
+            )
+            if not math.isfinite(loss) or not math.isfinite(acc):
+                status = "nonfinite_eval"
+                failed_round = rnd
+                break
 
-        loss_hist.append(float(loss))
-        acc_hist.append(float(acc))
+            loss_hist.append(float(loss))
+            acc_hist.append(float(acc))
+            eval_rounds.append(rnd)
 
         if rnd % args.log_every == 0 or rnd == 1:
             mac_label = "MAC" if use_mac else "no-MAC"
-            print(
-                f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
-                f"{method:<12} round {rnd:4d}/{args.rounds} "
-                f"loss={loss:.4f} acc={acc:.4f}",
-                flush=True,
-            )
+            if evaluated:
+                print(
+                    f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
+                    f"{method:<12} round {rnd:4d}/{args.rounds} "
+                    f"loss={loss:.4f} acc={acc:.4f}",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
+                    f"{method:<12} round {rnd:4d}/{args.rounds} eval=skipped",
+                    flush=True,
+                )
 
     result = {
         "seed": seed,
@@ -293,7 +355,8 @@ def run_trial(
         "use_mac": use_mac,
         "mac_clip": args.mac_clip if use_mac else None,
         "rounds_requested": args.rounds,
-        "rounds_completed": len(acc_hist),
+        "rounds_completed": completed_round,
+        "eval_rounds": eval_rounds,
         "status": status,
         "nonfinite": status != "ok",
         "failed_round": failed_round,
@@ -408,13 +471,19 @@ def parse_args():
     p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--save_diagnostics", action="store_true", default=False)
     p.add_argument("--out_dir", type=str, default="results/heavytail")
+    add_accelerator_args(p)
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    resolve_accelerator_args(args, device)
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
     print(f"Device: {device} | Config: {vars(args)}")
+    print(accelerator_summary(args))
 
     out_dir = Path(args.out_dir)
     common = {

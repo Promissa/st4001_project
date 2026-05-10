@@ -39,6 +39,13 @@ MAC_ALPHA="${MAC_ALPHA:-1.3}"
 MAC_CLIP="${MAC_CLIP:-3.0}"
 NOISE_SCALE="${NOISE_SCALE:-0.05}"
 DIR_CONC="${DIR_CONC:-0.1}"
+AMP="${AMP:-1}"
+AMP_DTYPE="${AMP_DTYPE:-bf16}"
+CHANNELS_LAST="${CHANNELS_LAST:-1}"
+FAST_DATA="${FAST_DATA:-auto}"
+EVAL_EVERY="${EVAL_EVERY:-5}"
+EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-1024}"
+DIAGNOSTICS_EVERY="${DIAGNOSTICS_EVERY:-0}"
 
 COMPARISON_DIR="${COMPARISON_DIR:-results/comparison}"
 ABLATION_DIR="${ABLATION_DIR:-results/ablation}"
@@ -46,6 +53,24 @@ HEAVYTAIL_DIR="${HEAVYTAIL_DIR:-results/heavytail}"
 FIGURE_DIR="${FIGURE_DIR:-results/figures}"
 SINGLE_DIR="${SINGLE_DIR:-results/single}"
 GENERATED_TEX_DIR="${GENERATED_TEX_DIR:-template/data/generated}"
+
+ACCELERATOR_FLAGS=(
+  --amp_dtype "$AMP_DTYPE"
+  --fast_data "$FAST_DATA"
+  --eval_every "$EVAL_EVERY"
+  --eval_batch_size "$EVAL_BATCH_SIZE"
+  --diagnostics_every "$DIAGNOSTICS_EVERY"
+)
+
+case "$AMP" in
+  1|true|TRUE|yes|YES) ACCELERATOR_FLAGS+=(--amp) ;;
+  0|false|FALSE|no|NO) ACCELERATOR_FLAGS+=(--no_amp) ;;
+esac
+
+case "$CHANNELS_LAST" in
+  1|true|TRUE|yes|YES) ACCELERATOR_FLAGS+=(--channels_last) ;;
+  0|false|FALSE|no|NO) ACCELERATOR_FLAGS+=(--no_channels_last) ;;
+esac
 
 run_cmd() {
   printf '\n==> %s\n' "$*"
@@ -81,7 +106,8 @@ train_cifar() {
     --non_iid \
     --dir_conc "$DIR_CONC" \
     --save_results \
-    --out_dir "$SINGLE_DIR"
+    --out_dir "$SINGLE_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 train_mnist() {
@@ -94,7 +120,8 @@ train_mnist() {
     --alpha 2.0 \
     --noise_scale "$NOISE_SCALE" \
     --save_results \
-    --out_dir "$SINGLE_DIR"
+    --out_dir "$SINGLE_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 train() {
@@ -118,7 +145,8 @@ compare_cifar() {
     --noise_scale "$NOISE_SCALE" \
     --non_iid \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$COMPARISON_DIR"
+    --out_dir "$COMPARISON_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 compare_mnist() {
@@ -130,7 +158,8 @@ compare_mnist() {
     --server_lr "$SERVER_LR" \
     --noise_scale "$NOISE_SCALE" \
     --beta2 "$BETA2" \
-    --out_dir "$COMPARISON_DIR"
+    --out_dir "$COMPARISON_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 compare() {
@@ -217,7 +246,8 @@ alpha_sanity() {
     --methods "adagrad_ota,adam_ota" \
     --log_every 1 \
     --save_diagnostics \
-    --out_dir "$HEAVYTAIL_DIR/sanity"
+    --out_dir "$HEAVYTAIL_DIR/sanity" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 alpha_ablation() {
@@ -237,7 +267,8 @@ alpha_ablation() {
     --seeds "$SEEDS" \
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$HEAVYTAIL_DIR"
+    --out_dir "$HEAVYTAIL_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 mac_compare() {
@@ -258,7 +289,8 @@ mac_compare() {
     --seeds "$SEEDS" \
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$HEAVYTAIL_DIR"
+    --out_dir "$HEAVYTAIL_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 paper_update() {
@@ -296,7 +328,8 @@ heavy_tail_compare() {
     --noise_scale "${HEAVY_NOISE_SCALE:-0.05}" \
     --non_iid \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$COMPARISON_DIR"
+    --out_dir "$COMPARISON_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 paper_like_compare() {
@@ -315,7 +348,8 @@ paper_like_compare() {
     --noise_scale 0.1 \
     --non_iid \
     --dir_conc 0.1 \
-    --out_dir "$COMPARISON_DIR/paper_like"
+    --out_dir "$COMPARISON_DIR/paper_like" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 help() {
@@ -354,6 +388,8 @@ Common overrides:
   ROUNDS=20 ABLATION_ROUNDS=10 ./run_all.sh workflow
   NUM_CLIENTS=10 MODEL=convnet ROUNDS=20 ./run_all.sh compare_cifar
   ABLATION_ROUNDS=20 SEEDS=42 ALPHA_VALUES=1.3,1.7,2.0 ./run_all.sh core_heavytail
+  CUDA_VISIBLE_DEVICES=0 FAST_DATA=on AMP=1 AMP_DTYPE=bf16 CHANNELS_LAST=1 EVAL_EVERY=5 ./run_all.sh alpha_ablation
+  COMPARE_BATCH_SIZE=128 HEAVYTAIL_LOCAL_EPOCHS=2 ./run_all.sh alpha_ablation
 EOF
 }
 
