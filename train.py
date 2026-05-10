@@ -26,7 +26,14 @@ from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 
 from src.channel.ota import NoisyOracle
-from src.data.datasets import get_dataset, iid_partition, dirichlet_partition, make_loader
+from src.data.datasets import (
+    get_dataset,
+    iid_partition,
+    dirichlet_partition,
+    make_loader,
+    make_fast_cifar10_loaders,
+    make_fast_cifar10_eval_loader,
+)
 from src.experiments.federated import run_round, evaluate, resolve_devices
 from src.models.nets import get_model
 from src.optimizers.adagrad_ota import AdaGradOTA
@@ -107,9 +114,15 @@ def parse_args():
     p.add_argument("--eval_batch_size", type=int, default=1024)
     p.add_argument("--compile_model", action="store_true", default=False,
                    help="Optionally torch.compile the global model in sequential mode")
+    p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto",
+                   help="Use cached tensor CIFAR-10 loaders with GPU batch transforms")
+    p.add_argument("--diagnostics_every", type=int, default=0,
+                   help="Collect expensive finite/norm diagnostics every K rounds; 0 means first round only")
     # TensorBoard
     p.add_argument("--use_tensorboard", action="store_true", default=True,
                    help="Enable TensorBoard logging")
+    p.add_argument("--no_tensorboard", dest="use_tensorboard", action="store_false",
+                   help="Disable TensorBoard logging")
     p.add_argument("--log_dir", type=str, default="runs",
                    help="TensorBoard log directory")
     return p.parse_args()
@@ -128,6 +141,13 @@ def main():
             and args.dataset == "cifar10"
             and args.model in ("resnet18", "resnet34", "convnet")
         )
+    args.use_fast_data = (
+        args.dataset == "cifar10"
+        and (
+            args.fast_data == "on"
+            or (args.fast_data == "auto" and device.type == "cuda")
+        )
+    )
 
     # Enable cuDNN autotuner for better convolution performance
     if torch.cuda.is_available():
@@ -165,6 +185,7 @@ def main():
             "amp": args.amp,
             "amp_dtype": args.amp_dtype,
             "channels_last": args.channels_last,
+            "fast_data": args.use_fast_data,
         }
         writer.add_hparams(hparams, {"hparam/best_accuracy": 0.0})
 
@@ -176,6 +197,7 @@ def main():
     print(f"Clients:   N={args.num_clients} | Non-IID: {args.non_iid} (Dir={args.dir_conc})")
     print(f"MAC:       {args.use_mac}")
     print(f"AMP:       {args.amp} ({args.amp_dtype}) | channels_last={args.channels_last}")
+    print(f"Fast data: {args.use_fast_data} ({args.fast_data}) | diagnostics_every={args.diagnostics_every}")
     print()
 
     # Data
@@ -185,9 +207,13 @@ def main():
                                       seed=args.seed)
     else:
         subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
-    client_loaders = [make_loader(s, args.batch_size) for s in subsets]
-    test_loader = DataLoader(test_ds, batch_size=args.eval_batch_size,
-                             shuffle=False, num_workers=0, pin_memory=True)
+    if args.use_fast_data:
+        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+    else:
+        client_loaders = [make_loader(s, args.batch_size) for s in subsets]
+        test_loader = DataLoader(test_ds, batch_size=args.eval_batch_size,
+                                 shuffle=False, num_workers=0, pin_memory=True)
 
     # Model, oracle, optimizer
     model = get_model(args.model).to(device)
@@ -204,6 +230,10 @@ def main():
     loss_hist, acc_hist = [], []
 
     for rnd in range(1, args.rounds + 1):
+        want_diagnostics = (
+            rnd == 1
+            or (args.diagnostics_every > 0 and rnd % args.diagnostics_every == 0)
+        )
         diagnostics = run_round(
             model, client_loaders, oracle, opt,
             local_epochs=args.local_epochs,
@@ -211,14 +241,16 @@ def main():
             use_mac=args.use_mac,
             mac_clip=args.mac_clip,
             device=device,
-            return_diagnostics=True,
+            return_diagnostics=want_diagnostics,
             worker_devices=devices,
             client_parallel=args.client_parallel,
             use_amp=args.amp,
             amp_dtype=args.amp_dtype,
             channels_last=args.channels_last,
         )
-        if rnd == 1:
+        if diagnostics is None:
+            diagnostics = {"status": "ok"}
+        if rnd == 1 and diagnostics is not None:
             worker_stats = diagnostics.get("worker_stats", [])
             shard_text = ", ".join(
                 f"{stat.get('device')}={stat.get('clients')} clients"
@@ -232,7 +264,7 @@ def main():
             print(f"Execution: {diagnostics.get('execution_path', 'unknown')} | {shard_text}")
             if time_text:
                 print(f"Worker time: {time_text}")
-        if diagnostics["status"] != "ok":
+        if diagnostics.get("status") != "ok":
             print(f"Stopped at round {rnd}: {diagnostics['status']}")
             break
         loss, acc = evaluate(

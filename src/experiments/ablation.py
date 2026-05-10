@@ -30,16 +30,29 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..channel.ota import NoisyOracle
-from ..data.datasets import get_dataset, dirichlet_partition, make_loader
+from ..data.datasets import (
+    get_dataset,
+    dirichlet_partition,
+    make_loader,
+    make_fast_cifar10_loaders,
+    make_fast_cifar10_eval_loader,
+)
 from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
-from .federated import run_round, evaluate
+from .federated import run_round, evaluate, resolve_devices
 
 
 NOISE_SCALES = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
 CLIENT_VALUES = [5, 10, 20, 50, 100]
+
+
+def _serializable_args(args) -> dict:
+    payload = vars(args).copy()
+    if "worker_devices" in payload:
+        payload["worker_devices"] = [str(device) for device in payload["worker_devices"]]
+    return payload
 
 
 def set_seed(seed: int) -> None:
@@ -81,23 +94,53 @@ def _run_single(
     client_subsets = dirichlet_partition(train_ds, num_clients,
                                          concentration=args.dir_conc,
                                          seed=args.seed)
-    client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
-    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, num_workers=2)
+    if args.use_fast_data:
+        client_loaders = make_fast_cifar10_loaders(client_subsets, args.batch_size)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+    else:
+        client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
 
     oracle = NoisyOracle(alpha=args.alpha, noise_scale=noise_scale, device=device)
 
     set_seed(args.seed)
     model = get_model(model_name, num_classes=10).to(device)
+    if args.channels_last:
+        model = model.to(memory_format=torch.channels_last)
     opt = _build_optimizer(optimizer_name, model, args)
 
     loss_hist, acc_hist = [], []
-    for _ in range(1, rounds + 1):
-        run_round(model, client_loaders, oracle, opt,
-                  local_epochs=args.local_epochs,
-                  local_lr=args.local_lr,
-                  use_mac=args.use_mac,
-                  device=device)
-        loss, acc = evaluate(model, test_loader, device)
+    for rnd in range(1, rounds + 1):
+        run_round(
+            model,
+            client_loaders,
+            oracle,
+            opt,
+            local_epochs=args.local_epochs,
+            local_lr=args.local_lr,
+            use_mac=args.use_mac,
+            device=device,
+            return_diagnostics=(rnd == 1),
+            worker_devices=args.worker_devices,
+            client_parallel=args.client_parallel,
+            use_amp=args.amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.channels_last,
+        )
+        loss, acc = evaluate(
+            model,
+            test_loader,
+            device,
+            use_amp=args.amp,
+            amp_dtype=args.amp_dtype,
+            channels_last=args.channels_last,
+        )
         loss_hist.append(loss)
         acc_hist.append(acc)
 
@@ -165,12 +208,42 @@ def parse_args():
     p.add_argument("--use_mac", action="store_true", default=False)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out_dir", type=str, default="results/ablation")
+    p.add_argument("--devices", type=str, default="0,1")
+    p.add_argument("--client_parallel", choices=["auto", "off"], default="auto")
+    p.add_argument("--amp", dest="amp", action="store_true", default=None)
+    p.add_argument("--no_amp", dest="amp", action="store_false")
+    p.add_argument("--amp_dtype", choices=["bf16", "fp16"], default="bf16")
+    p.add_argument("--channels_last", dest="channels_last", action="store_true",
+                   default=None)
+    p.add_argument("--no_channels_last", dest="channels_last", action="store_false")
+    p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto")
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    args.worker_devices = resolve_devices(args.devices)
+    device = args.worker_devices[0]
+    if args.amp is None:
+        args.amp = device.type == "cuda"
+    if args.channels_last is None:
+        args.channels_last = (
+            device.type == "cuda"
+            and args.dataset == "cifar10"
+            and args.model in ("resnet18", "resnet34", "convnet")
+        )
+    args.use_fast_data = (
+        args.dataset == "cifar10"
+        and (
+            args.fast_data == "on"
+            or (args.fast_data == "auto" and device.type == "cuda")
+        )
+    )
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+        torch.set_float32_matmul_precision("high")
     print(f"Device: {device} | Config: {vars(args)}")
 
     out_dir = Path(args.out_dir)
@@ -180,7 +253,7 @@ if __name__ == "__main__":
         res_noise = ablation_noise(args, device)
         path = out_dir / f"ablation_noise_{args.dataset}_{args.model}.json"
         with open(path, "w") as f:
-            json.dump({"args": vars(args),
+            json.dump({"args": _serializable_args(args),
                        "results": {str(k): v for k, v in res_noise.items()}},
                       f, indent=2)
         print(f"Saved: {path}")
@@ -189,7 +262,7 @@ if __name__ == "__main__":
         res_clients = ablation_clients(args, device)
         path = out_dir / f"ablation_clients_{args.dataset}_{args.model}.json"
         with open(path, "w") as f:
-            json.dump({"args": vars(args),
+            json.dump({"args": _serializable_args(args),
                        "results": {str(k): v for k, v in res_clients.items()}},
                       f, indent=2)
         print(f"Saved: {path}")

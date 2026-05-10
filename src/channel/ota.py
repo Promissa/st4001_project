@@ -36,10 +36,11 @@ class NoisyOracle:
         self.alpha = alpha
         self.noise_scale = noise_scale
         self.device = device
-        self.begin_round()
+        self.begin_round(collect_diagnostics=False)
 
-    def begin_round(self) -> None:
+    def begin_round(self, collect_diagnostics: bool = False) -> None:
         """Reset per-round diagnostic statistics."""
+        self.collect_diagnostics = collect_diagnostics
         self.round_noise_sq = 0.0
         self.round_noise_max_abs = 0.0
         self.round_noise_finite = True
@@ -78,18 +79,19 @@ class NoisyOracle:
             )
             xi = xi.to(dtype=aggregated.dtype, device=aggregated.device)
 
-        xi_finite = torch.isfinite(xi).all().item()
-        self.round_noise_finite = self.round_noise_finite and bool(xi_finite)
-        if xi_finite:
-            xi_float = xi.detach().float()
-            self.round_noise_sq += float(xi_float.pow(2).sum().item())
-            self.round_noise_max_abs = max(
-                self.round_noise_max_abs,
-                float(xi_float.abs().max().item()) if xi_float.numel() else 0.0,
-            )
-        else:
-            self.round_noise_sq = float("inf")
-            self.round_noise_max_abs = float("inf")
+        if self.collect_diagnostics:
+            xi_finite = torch.isfinite(xi).all().item()
+            self.round_noise_finite = self.round_noise_finite and bool(xi_finite)
+            if xi_finite:
+                xi_float = xi.detach().float()
+                self.round_noise_sq += float(xi_float.pow(2).sum().item())
+                self.round_noise_max_abs = max(
+                    self.round_noise_max_abs,
+                    float(xi_float.abs().max().item()) if xi_float.numel() else 0.0,
+                )
+            else:
+                self.round_noise_sq = float("inf")
+                self.round_noise_max_abs = float("inf")
 
         return aggregated + xi
 

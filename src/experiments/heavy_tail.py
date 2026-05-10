@@ -26,7 +26,14 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..channel.ota import NoisyOracle
-from ..data.datasets import get_dataset, dirichlet_partition, iid_partition, make_loader
+from ..data.datasets import (
+    get_dataset,
+    dirichlet_partition,
+    iid_partition,
+    make_loader,
+    make_fast_cifar10_loaders,
+    make_fast_cifar10_eval_loader,
+)
 from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
@@ -90,14 +97,18 @@ def _make_loaders(args, seed: int):
     else:
         subsets = iid_partition(train_ds, args.num_clients, seed=seed)
 
-    client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
-    test_loader = DataLoader(
-        test_ds,
-        batch_size=args.eval_batch_size,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=True,
-    )
+    if getattr(args, "use_fast_data", False):
+        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+    else:
+        client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
     return client_loaders, test_loader
 
 
@@ -161,6 +172,8 @@ def _payload_matches_current_config(payload: dict, args) -> bool:
         "local_epochs",
         "batch_size",
         "non_iid",
+        "fast_data",
+        "use_fast_data",
     ]
     float_keys = [
         "server_lr",
@@ -260,6 +273,11 @@ def run_trial(
     failed_round = None
 
     for rnd in range(1, args.rounds + 1):
+        want_diagnostics = (
+            args.save_diagnostics
+            or rnd == 1
+            or (args.diagnostics_every > 0 and rnd % args.diagnostics_every == 0)
+        )
         diag = run_round(
             model,
             client_loaders,
@@ -270,13 +288,16 @@ def run_trial(
             use_mac=use_mac,
             mac_clip=args.mac_clip,
             device=device,
-            return_diagnostics=True,
+            return_diagnostics=want_diagnostics,
             worker_devices=worker_devices,
             client_parallel=args.client_parallel,
             use_amp=args.amp,
             amp_dtype=args.amp_dtype,
             channels_last=args.channels_last,
         )
+
+        if diag is None:
+            diag = {"status": "ok"}
 
         if args.save_diagnostics:
             diagnostics.append({"round": rnd, **diag})
@@ -460,6 +481,10 @@ def parse_args():
     p.add_argument("--no_channels_last", dest="channels_last", action="store_false")
     p.add_argument("--eval_batch_size", type=int, default=1024)
     p.add_argument("--compile_model", action="store_true", default=False)
+    p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto",
+                   help="Use cached tensor CIFAR-10 loaders with GPU batch transforms")
+    p.add_argument("--diagnostics_every", type=int, default=0,
+                   help="Collect expensive finite/norm diagnostics every K rounds; 0 means first round only")
     return p.parse_args()
 
 
@@ -475,12 +500,25 @@ if __name__ == "__main__":
             and args.dataset == "cifar10"
             and args.model in ("resnet18", "resnet34", "convnet")
         )
+    args.use_fast_data = (
+        args.dataset == "cifar10"
+        and (
+            args.fast_data == "on"
+            or (args.fast_data == "auto" and device.type == "cuda")
+        )
+    )
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
         torch.set_float32_matmul_precision("high")
 
     print(f"Device: {device} | Workers: {[str(d) for d in worker_devices]} | Config: {vars(args)}")
+    print(
+        f"Accelerator: amp={args.amp} ({args.amp_dtype}) | "
+        f"channels_last={args.channels_last} | fast_data={args.use_fast_data} "
+        f"({args.fast_data}) | diagnostics_every={args.diagnostics_every}",
+        flush=True,
+    )
 
     out_dir = Path(args.out_dir)
     common = {

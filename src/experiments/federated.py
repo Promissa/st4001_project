@@ -97,6 +97,19 @@ def _prepare_batch(
     return x, y
 
 
+def _prepare_loader_batch(
+    loader: DataLoader,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    device: torch.device,
+    channels_last: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    prepare_batch = getattr(loader, "prepare_batch", None)
+    if callable(prepare_batch):
+        return prepare_batch(x, y, device, channels_last)
+    return _prepare_batch(x, y, device, channels_last)
+
+
 def _maybe_channels_last(model: nn.Module, enabled: bool) -> nn.Module:
     if enabled:
         model = model.to(memory_format=torch.channels_last)
@@ -131,40 +144,39 @@ def _finalize_round(
     if use_mac:
         agg_grads = apply_mac(agg_grads, clip_factor=mac_clip)
 
-    agg_finite = _list_finite(agg_grads)
-    diagnostics = {
-        "status": "ok" if agg_finite else "nonfinite_aggregate",
-        "agg_finite": agg_finite,
-        "agg_norm": _list_norm(agg_grads) if agg_finite else float("inf"),
-        "agg_max_abs": _list_max_abs(agg_grads) if agg_finite else float("inf"),
-        "use_mac": use_mac,
-    }
-    if hasattr(oracle, "diagnostics"):
-        diagnostics.update(oracle.diagnostics())
-
-    if not agg_finite:
-        if return_diagnostics:
-            return diagnostics
-        raise FloatingPointError("Non-finite OTA aggregate encountered.")
-
+    diagnostics = None
     old_params = None
     if return_diagnostics:
+        agg_finite = _list_finite(agg_grads)
+        diagnostics = {
+            "status": "ok" if agg_finite else "nonfinite_aggregate",
+            "agg_finite": agg_finite,
+            "agg_norm": _list_norm(agg_grads) if agg_finite else float("inf"),
+            "agg_max_abs": _list_max_abs(agg_grads) if agg_finite else float("inf"),
+            "use_mac": use_mac,
+        }
+        if hasattr(oracle, "diagnostics"):
+            diagnostics.update(oracle.diagnostics())
+
+        if not agg_finite:
+            return diagnostics
+
         old_params = [p.detach().clone() for p in global_model.parameters()]
 
     server_opt.step(agg_grads)
 
-    model_tensors = [p.detach() for p in global_model.parameters()]
-    state_tensors = _optimizer_state_tensors(server_opt)
-    model_finite = _list_finite(model_tensors)
-    opt_finite = _list_finite(state_tensors) if state_tensors else True
-    diagnostics["model_finite"] = model_finite
-    diagnostics["optimizer_finite"] = opt_finite
-    if not model_finite:
-        diagnostics["status"] = "nonfinite_model"
-    elif not opt_finite:
-        diagnostics["status"] = "nonfinite_optimizer"
-
     if old_params is not None:
+        model_tensors = [p.detach() for p in global_model.parameters()]
+        state_tensors = _optimizer_state_tensors(server_opt)
+        model_finite = _list_finite(model_tensors)
+        opt_finite = _list_finite(state_tensors) if state_tensors else True
+        diagnostics["model_finite"] = model_finite
+        diagnostics["optimizer_finite"] = opt_finite
+        if not model_finite:
+            diagnostics["status"] = "nonfinite_model"
+        elif not opt_finite:
+            diagnostics["status"] = "nonfinite_optimizer"
+
         updates = [
             old - new.detach()
             for old, new in zip(old_params, global_model.parameters())
@@ -180,11 +192,6 @@ def _finalize_round(
             diagnostics["v_norm"] = _list_norm(adaptive_state)
             diagnostics["v_max_abs"] = _list_max_abs(adaptive_state)
 
-    if not model_finite or not opt_finite:
-        if return_diagnostics:
-            return diagnostics
-        raise FloatingPointError("Non-finite model or optimizer state encountered.")
-
     if buffer_sums and buffer_count > 0:
         with torch.no_grad():
             for name, global_buf in global_model.named_buffers():
@@ -192,7 +199,7 @@ def _finalize_round(
                     averaged = buffer_sums[name].to(global_buf.device) / buffer_count
                     global_buf.copy_(averaged)
 
-    return diagnostics if return_diagnostics else None
+    return diagnostics
 
 
 def local_grad(
@@ -233,7 +240,7 @@ def local_grad(
 
     for _ in range(local_epochs):
         for x, y in loader:
-            x, y = _prepare_batch(x, y, device, channels_last)
+            x, y = _prepare_loader_batch(loader, x, y, device, channels_last)
             opt.zero_grad(set_to_none=True)
             with _autocast(device, use_amp, amp_dtype):
                 loss = criterion(local_model(x), y)
@@ -295,7 +302,7 @@ def _train_client_shard(
             for x, y in loader:
                 num_batches += 1
                 num_samples += int(y.numel())
-                x, y = _prepare_batch(x, y, device, channels_last)
+                x, y = _prepare_loader_batch(loader, x, y, device, channels_last)
                 opt.zero_grad(set_to_none=True)
                 with _autocast(device, use_amp, amp_dtype):
                     loss = criterion(local_model(x), y)
@@ -448,7 +455,7 @@ def run_round(
     """
     N = len(client_loaders)
     if hasattr(oracle, "begin_round"):
-        oracle.begin_round()
+        oracle.begin_round(collect_diagnostics=return_diagnostics)
 
     worker_devices = worker_devices or [device]
     can_parallel = (
@@ -538,7 +545,7 @@ def evaluate(
 
     with torch.no_grad():
         for x, y in loader:
-            x, y = _prepare_batch(x, y, device, channels_last)
+            x, y = _prepare_loader_batch(loader, x, y, device, channels_last)
             with _autocast(device, use_amp, amp_dtype):
                 out = model(x)
                 loss = criterion(out, y)

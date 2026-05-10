@@ -46,6 +46,9 @@ AMP="${AMP:-1}"
 AMP_DTYPE="${AMP_DTYPE:-bf16}"
 CHANNELS_LAST="${CHANNELS_LAST:-auto}"
 EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-1024}"
+FAST_DATA="${FAST_DATA:-auto}"
+DIAGNOSTICS_EVERY="${DIAGNOSTICS_EVERY:-0}"
+TENSORBOARD="${TENSORBOARD:-0}"
 
 COMPARISON_DIR="${COMPARISON_DIR:-results/comparison}"
 ABLATION_DIR="${ABLATION_DIR:-results/ablation}"
@@ -65,6 +68,8 @@ build_accelerator_flags() {
     --client_parallel "$CLIENT_PARALLEL"
     --amp_dtype "$AMP_DTYPE"
     --eval_batch_size "$EVAL_BATCH_SIZE"
+    --fast_data "$FAST_DATA"
+    --diagnostics_every "$DIAGNOSTICS_EVERY"
   )
 
   if [[ "$AMP" == "0" || "$AMP" == "false" ]]; then
@@ -77,6 +82,15 @@ build_accelerator_flags() {
     1|true|yes) ACCELERATOR_FLAGS+=(--channels_last) ;;
     0|false|no) ACCELERATOR_FLAGS+=(--no_channels_last) ;;
   esac
+}
+
+build_tensorboard_flags() {
+  TENSORBOARD_FLAGS=()
+  if [[ "$TENSORBOARD" == "0" || "$TENSORBOARD" == "false" ]]; then
+    TENSORBOARD_FLAGS+=(--no_tensorboard)
+  else
+    TENSORBOARD_FLAGS+=(--use_tensorboard)
+  fi
 }
 
 setup() {
@@ -92,6 +106,7 @@ data() {
 
 train_cifar() {
   build_accelerator_flags
+  build_tensorboard_flags
   run_cmd uv run train.py \
     --dataset cifar10 \
     --model resnet18 \
@@ -110,11 +125,13 @@ train_cifar() {
     --dir_conc "$DIR_CONC" \
     --save_results \
     --out_dir "$SINGLE_DIR" \
-    "${ACCELERATOR_FLAGS[@]}"
+    "${ACCELERATOR_FLAGS[@]}" \
+    "${TENSORBOARD_FLAGS[@]}"
 }
 
 train_mnist() {
   build_accelerator_flags
+  build_tensorboard_flags
   run_cmd uv run train.py \
     --dataset mnist \
     --model mlp \
@@ -127,7 +144,8 @@ train_mnist() {
     --noise_scale "$NOISE_SCALE" \
     --save_results \
     --out_dir "$SINGLE_DIR" \
-    "${ACCELERATOR_FLAGS[@]}"
+    "${ACCELERATOR_FLAGS[@]}" \
+    "${TENSORBOARD_FLAGS[@]}"
 }
 
 train() {
@@ -136,6 +154,7 @@ train() {
 }
 
 compare_cifar() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.compare \
     --dataset cifar10 \
     --model resnet18 \
@@ -151,10 +170,12 @@ compare_cifar() {
     --noise_scale "$NOISE_SCALE" \
     --non_iid \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$COMPARISON_DIR"
+    --out_dir "$COMPARISON_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 compare_mnist() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.compare \
     --dataset mnist \
     --model mlp \
@@ -163,7 +184,8 @@ compare_mnist() {
     --server_lr "$SERVER_LR" \
     --noise_scale "$NOISE_SCALE" \
     --beta2 "$BETA2" \
-    --out_dir "$COMPARISON_DIR"
+    --out_dir "$COMPARISON_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 compare() {
@@ -172,6 +194,7 @@ compare() {
 }
 
 ablation_noise() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.ablation --study noise \
     --dataset "$DATASET" \
     --model "$MODEL" \
@@ -181,10 +204,12 @@ ablation_noise() {
     --server_lr "$ABLATION_SERVER_LR" \
     --local_lr "$LOCAL_LR" \
     --beta2 "$BETA2" \
-    --out_dir "$ABLATION_DIR"
+    --out_dir "$ABLATION_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 ablation_clients() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.ablation --study clients \
     --dataset "$DATASET" \
     --model "$MODEL" \
@@ -193,10 +218,12 @@ ablation_clients() {
     --alpha 2.0 \
     --server_lr "$ABLATION_SERVER_LR" \
     --beta2 "$BETA2" \
-    --out_dir "$ABLATION_DIR"
+    --out_dir "$ABLATION_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 ablation() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.ablation --study both \
     --dataset "$DATASET" \
     --model "$MODEL" \
@@ -204,7 +231,8 @@ ablation() {
     --alpha 2.0 \
     --server_lr "$ABLATION_SERVER_LR" \
     --beta2 "$BETA2" \
-    --out_dir "$ABLATION_DIR"
+    --out_dir "$ABLATION_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 plot() {
@@ -320,6 +348,7 @@ core_heavytail() {
 }
 
 heavy_tail_compare() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.compare \
     --dataset cifar10 \
     --model resnet18 \
@@ -335,10 +364,12 @@ heavy_tail_compare() {
     --noise_scale "${HEAVY_NOISE_SCALE:-0.05}" \
     --non_iid \
     --dir_conc "$DIR_CONC" \
-    --out_dir "$COMPARISON_DIR"
+    --out_dir "$COMPARISON_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 paper_like_compare() {
+  build_accelerator_flags
   run_cmd uv run -m src.experiments.compare \
     --dataset cifar10 \
     --model resnet18 \
@@ -354,7 +385,8 @@ paper_like_compare() {
     --noise_scale 0.1 \
     --non_iid \
     --dir_conc 0.1 \
-    --out_dir "$COMPARISON_DIR/paper_like"
+    --out_dir "$COMPARISON_DIR/paper_like" \
+    "${ACCELERATOR_FLAGS[@]}"
 }
 
 help() {
@@ -393,6 +425,7 @@ Common overrides:
   ROUNDS=20 ABLATION_ROUNDS=10 ./run_all.sh workflow
   NUM_CLIENTS=10 MODEL=convnet ROUNDS=20 ./run_all.sh compare_cifar
   ABLATION_ROUNDS=20 SEEDS=42 ALPHA_VALUES=1.3,1.7,2.0 ./run_all.sh core_heavytail
+  FAST_DATA=on DIAGNOSTICS_EVERY=0 TENSORBOARD=0 ./run_all.sh alpha_ablation
 EOF
 }
 
