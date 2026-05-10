@@ -9,6 +9,8 @@ Partitioning strategies:
                          Dir→∞  → approaches IID.
 """
 
+import warnings
+
 import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
@@ -44,8 +46,17 @@ def get_dataset(name: str, root: str = "./data") -> tuple:
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
-        train = datasets.CIFAR10(root, train=True, download=True, transform=transform_train)
-        test = datasets.CIFAR10(root, train=False, download=True, transform=transform_test)
+        # Torchvision can emit a NumPy deprecation warning while unpickling
+        # valid CIFAR-10 files. Keep long experiment logs readable.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"dtype\(\): align should be passed.*",
+                category=Warning,
+                module=r"torchvision\.datasets\.cifar",
+            )
+            train = datasets.CIFAR10(root, train=True, download=True, transform=transform_train)
+            test = datasets.CIFAR10(root, train=False, download=True, transform=transform_test)
     else:
         raise ValueError(f"Unknown dataset: {name}. Choose 'mnist' or 'cifar10'.")
     return train, test

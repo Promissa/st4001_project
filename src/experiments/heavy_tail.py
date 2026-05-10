@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import random
@@ -126,6 +127,107 @@ def _summary(runs: list[dict]) -> dict:
         "best_acc": stats(best_acc),
         "final_loss": stats(final_loss),
     }
+
+
+def _same_float(left: float | None, right: float | None, tol: float = 1e-12) -> bool:
+    if left is None or right is None:
+        return left is right
+    return math.isclose(float(left), float(right), rel_tol=tol, abs_tol=tol)
+
+
+def _alpha_ablation_paths(args) -> list[Path]:
+    out_dir = Path(args.out_dir)
+    preferred = out_dir / f"alpha_ablation_{args.dataset}_{args.model}.json"
+    paths = []
+    if preferred.exists():
+        paths.append(preferred)
+    if out_dir.exists():
+        for path in sorted(out_dir.rglob(f"alpha_ablation_{args.dataset}_{args.model}.json")):
+            if path not in paths:
+                paths.append(path)
+    return paths
+
+
+def _payload_matches_current_config(payload: dict, args) -> bool:
+    if payload.get("study") != "alpha":
+        return False
+    if payload.get("dataset") != args.dataset or payload.get("model") != args.model:
+        return False
+
+    payload_args = payload.get("args", {})
+    exact_keys = [
+        "rounds",
+        "num_clients",
+        "local_epochs",
+        "batch_size",
+        "non_iid",
+    ]
+    float_keys = [
+        "server_lr",
+        "local_lr",
+        "momentum",
+        "beta2",
+        "noise_scale",
+        "dir_conc",
+    ]
+
+    for key in exact_keys:
+        if payload_args.get(key) != getattr(args, key):
+            return False
+    for key in float_keys:
+        if not _same_float(payload_args.get(key), getattr(args, key)):
+            return False
+    return True
+
+
+def _run_matches_no_mac_ablation(run: dict, method: str, seed: int, alpha: float, args) -> bool:
+    return (
+        run.get("method") == method
+        and run.get("seed") == seed
+        and run.get("use_mac") is False
+        and _same_float(run.get("alpha"), alpha)
+        and _same_float(run.get("noise_scale"), args.noise_scale)
+    )
+
+
+def _find_no_mac_ablation_runs(args) -> tuple[dict[str, dict[int, dict]], set[str]]:
+    """Find matching no-MAC runs already produced by the alpha ablation study."""
+    alpha_key = f"{args.mac_alpha:g}"
+    wanted_seeds = set(args.seeds)
+    cached_runs = {method: {} for method in args.methods}
+    sources: set[str] = set()
+
+    for path in _alpha_ablation_paths(args):
+        try:
+            with open(path) as f:
+                payload = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"Skipping unreadable alpha ablation file {path}: {exc}", flush=True)
+            continue
+
+        if not _payload_matches_current_config(payload, args):
+            continue
+
+        alpha_results = payload.get("results", {}).get(alpha_key)
+        if not isinstance(alpha_results, dict):
+            continue
+
+        for method in args.methods:
+            method_block = alpha_results.get(method)
+            if not isinstance(method_block, dict):
+                continue
+            method_runs = method_block.get("runs", [])
+            if not isinstance(method_runs, list):
+                continue
+            for run in method_runs:
+                seed = run.get("seed")
+                if seed not in wanted_seeds or seed in cached_runs[method]:
+                    continue
+                if _run_matches_no_mac_ablation(run, method, seed, args.mac_alpha, args):
+                    cached_runs[method][seed] = copy.deepcopy(run)
+                    sources.add(str(path))
+
+    return cached_runs, sources
 
 
 def run_trial(
@@ -267,17 +369,45 @@ def run_alpha_ablation(args, device: torch.device, worker_devices: list[torch.de
 
 def run_mac_compare(args, device: torch.device, worker_devices: list[torch.device]) -> dict:
     print("\n=== Robust pre-processing: MAC vs no-MAC ===")
+    cached_no_mac, sources = _find_no_mac_ablation_runs(args)
+    if sources:
+        source_list = ", ".join(sorted(sources))
+        reused = sum(len(seed_runs) for seed_runs in cached_no_mac.values())
+        print(
+            f"Reusing {reused} no-MAC run(s) from alpha ablation data: {source_list}",
+            flush=True,
+        )
+
     results = {"no_mac": {}, "mac": {}}
     for use_mac, key in [(False, "no_mac"), (True, "mac")]:
         for method in args.methods:
             runs = []
+            reused_seeds = []
             for seed in args.seeds:
+                cached_run = None if use_mac else cached_no_mac.get(method, {}).get(seed)
+                if cached_run is not None:
+                    print(
+                        f"\n{key} alpha={args.mac_alpha:g} method={method} seed={seed} "
+                        "reused from alpha ablation",
+                        flush=True,
+                    )
+                    runs.append(cached_run)
+                    reused_seeds.append(seed)
+                    continue
+
                 print(f"\n{key} alpha={args.mac_alpha:g} method={method} seed={seed}", flush=True)
                 runs.append(run_trial(method, args.mac_alpha, seed, use_mac, args, device, worker_devices))
-            results[key][method] = {
+
+            method_result = {
                 "runs": runs,
                 "summary": _summary(runs),
             }
+            if reused_seeds:
+                method_result["reused_from_alpha_ablation"] = {
+                    "seeds": reused_seeds,
+                    "sources": sorted(sources),
+                }
+            results[key][method] = method_result
     return results
 
 
