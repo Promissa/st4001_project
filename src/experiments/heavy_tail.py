@@ -19,6 +19,7 @@ import copy
 import json
 import math
 import random
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -93,7 +94,7 @@ def build_optimizer(name: str, model: torch.nn.Module, args, alpha: float) -> ob
     raise ValueError(f"Unknown optimizer: {name}")
 
 
-def _make_loaders(args, seed: int):
+def _make_loaders(args, seed: int, device: torch.device | None = None):
     train_ds, test_ds = get_dataset(args.dataset)
     if args.non_iid:
         subsets = dirichlet_partition(
@@ -106,8 +107,8 @@ def _make_loaders(args, seed: int):
         subsets = iid_partition(train_ds, args.num_clients, seed=seed)
 
     if args.use_fast_data:
-        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
-        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size, device=device)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size, device=device)
     else:
         client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
         test_loader = DataLoader(
@@ -267,7 +268,7 @@ def run_trial(
     device: torch.device,
 ) -> dict:
     set_seed(seed)
-    client_loaders, test_loader = _make_loaders(args, seed)
+    client_loaders, test_loader = _make_loaders(args, seed, device)
 
     set_seed(seed)
     model = configure_model(get_model(args.model, num_classes=10), args, device)
@@ -380,10 +381,16 @@ def run_alpha_ablation(args, device: torch.device) -> dict:
         alpha_key = f"{alpha:g}"
         results[alpha_key] = {}
         for method in args.methods:
-            runs = []
-            for seed in args.seeds:
-                print(f"\nalpha={alpha_key} method={method} seed={seed}", flush=True)
-                runs.append(run_trial(method, alpha, seed, False, args, device))
+            seeds = args.seeds
+            if len(seeds) > 1:
+                with ThreadPoolExecutor(max_workers=len(seeds)) as executor:
+                    futures = [
+                        executor.submit(run_trial, method, alpha, seed, False, args, device)
+                        for seed in seeds
+                    ]
+                    runs = [f.result() for f in futures]
+            else:
+                runs = [run_trial(method, alpha, seeds[0], False, args, device)]
             results[alpha_key][method] = {
                 "runs": runs,
                 "summary": _summary(runs),
@@ -407,20 +414,26 @@ def run_mac_compare(args, device: torch.device) -> dict:
         for method in args.methods:
             runs = []
             reused_seeds = []
+            seeds_to_run = []
             for seed in args.seeds:
                 cached_run = None if use_mac else cached_no_mac.get(method, {}).get(seed)
                 if cached_run is not None:
-                    print(
-                        f"\n{key} alpha={args.mac_alpha:g} method={method} seed={seed} "
-                        "reused from alpha ablation",
-                        flush=True,
-                    )
                     runs.append(cached_run)
                     reused_seeds.append(seed)
-                    continue
+                else:
+                    seeds_to_run.append(seed)
 
-                print(f"\n{key} alpha={args.mac_alpha:g} method={method} seed={seed}", flush=True)
-                runs.append(run_trial(method, args.mac_alpha, seed, use_mac, args, device))
+            if seeds_to_run:
+                if len(seeds_to_run) > 1:
+                    with ThreadPoolExecutor(max_workers=len(seeds_to_run)) as executor:
+                        futures = [
+                            executor.submit(run_trial, method, args.mac_alpha, seed, use_mac, args, device)
+                            for seed in seeds_to_run
+                        ]
+                        trial_results = [f.result() for f in futures]
+                else:
+                    trial_results = [run_trial(method, args.mac_alpha, seeds_to_run[0], use_mac, args, device)]
+                runs.extend(trial_results)
 
             method_result = {
                 "runs": runs,

@@ -179,31 +179,52 @@ class FastCIFAR10Loader:
         shuffle: bool = True,
         train: bool = True,
         pin_memory: bool = True,
+        device: torch.device | None = None,
     ):
         self.store = store
         self.indices = torch.as_tensor(indices, dtype=torch.long)
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.train = train
-        self.pin_memory = pin_memory and torch.cuda.is_available()
+        self.pin_memory = pin_memory and torch.cuda.is_available() and (device is None or device.type != "cuda")
+        self.device = device
         self._norm_cache: dict[tuple[str, torch.dtype], tuple[torch.Tensor, torch.Tensor]] = {}
+
+        # Pre-load client data to GPU to eliminate per-batch CPU→GPU transfer
+        if device is not None and device.type == "cuda":
+            self._images = store.images.index_select(0, self.indices).to(device, non_blocking=True)
+            self._labels = store.labels.index_select(0, self.indices).to(device, non_blocking=True)
+        else:
+            self._images = None
+            self._labels = None
 
     def __len__(self) -> int:
         return int(np.ceil(len(self.indices) / self.batch_size))
 
     def __iter__(self):
-        if self.shuffle:
-            order = self.indices[torch.randperm(len(self.indices))]
+        if self._images is not None:
+            # GPU-resident path: shuffle and slice directly on GPU
+            order = (
+                torch.randperm(len(self.indices), device=self.device)
+                if self.shuffle
+                else torch.arange(len(self.indices), device=self.device)
+            )
+            for start in range(0, len(order), self.batch_size):
+                idx = order[start:start + self.batch_size]
+                yield self._images.index_select(0, idx), self._labels.index_select(0, idx)
         else:
-            order = self.indices
-        for start in range(0, len(order), self.batch_size):
-            idx = order[start:start + self.batch_size]
-            x = self.store.images.index_select(0, idx)
-            y = self.store.labels.index_select(0, idx)
-            if self.pin_memory:
-                x = x.pin_memory()
-                y = y.pin_memory()
-            yield x, y
+            if self.shuffle:
+                order = self.indices[torch.randperm(len(self.indices))]
+            else:
+                order = self.indices
+            for start in range(0, len(order), self.batch_size):
+                idx = order[start:start + self.batch_size]
+                x = self.store.images.index_select(0, idx)
+                y = self.store.labels.index_select(0, idx)
+                if self.pin_memory:
+                    x = x.pin_memory()
+                    y = y.pin_memory()
+                yield x, y
 
     def _norm_tensors(self, device: torch.device, dtype: torch.dtype):
         key = (str(device), dtype)
@@ -240,6 +261,7 @@ def make_fast_cifar10_loaders(
     batch_size: int,
     shuffle: bool = True,
     pin_memory: bool = True,
+    device: torch.device | None = None,
 ) -> list[FastCIFAR10Loader]:
     if not subsets:
         return []
@@ -252,6 +274,7 @@ def make_fast_cifar10_loaders(
             shuffle=shuffle,
             train=True,
             pin_memory=pin_memory,
+            device=device,
         )
         for subset in subsets
     ]
@@ -261,6 +284,7 @@ def make_fast_cifar10_eval_loader(
     dataset,
     batch_size: int,
     pin_memory: bool = True,
+    device: torch.device | None = None,
 ) -> FastCIFAR10Loader:
     store = FastCIFAR10Store(dataset)
     return FastCIFAR10Loader(
@@ -270,4 +294,5 @@ def make_fast_cifar10_eval_loader(
         shuffle=False,
         train=False,
         pin_memory=pin_memory,
+        device=device,
     )

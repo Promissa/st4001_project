@@ -21,6 +21,22 @@ from torch.utils.data import DataLoader
 from ..channel.ota import NoisyOracle
 from ..channel.mac import apply_mac
 
+# Cache local model buffers per global model instance to avoid per-round deepcopy
+_local_model_cache: dict[int, nn.Module] = {}
+
+
+def _get_cached_local_model(global_model: nn.Module, device: torch.device) -> nn.Module:
+    model_id = id(global_model)
+    if model_id not in _local_model_cache:
+        _local_model_cache[model_id] = copy.deepcopy(global_model).to(device)
+    local_model = _local_model_cache[model_id]
+    with torch.no_grad():
+        for p_local, p_global in zip(local_model.parameters(), global_model.parameters()):
+            p_local.copy_(p_global)
+        for b_local, b_global in zip(local_model.buffers(), global_model.buffers()):
+            b_local.copy_(b_global)
+    return local_model
+
 
 def _list_norm(tensors: list[torch.Tensor]) -> float:
     total = 0.0
@@ -215,9 +231,9 @@ def run_round(
     if hasattr(oracle, "begin_round"):
         oracle.begin_round(collect_diagnostics=return_diagnostics)
 
-    # Step 2: client local updates. A single reusable local model avoids a
-    # deepcopy per client and keeps memory traffic much lower on fast GPUs.
-    local_model = copy.deepcopy(global_model).to(device)
+    # Step 2: client local updates. Reuse a cached local model buffer to avoid
+    # per-round deepcopy overhead on the CPU.
+    local_model = _get_cached_local_model(global_model, device)
     if channels_last:
         local_model = local_model.to(memory_format=torch.channels_last)
     local_opt = torch.optim.SGD(local_model.parameters(), lr=local_lr)
@@ -353,7 +369,9 @@ def evaluate(
     """
     model.eval()
     criterion = nn.CrossEntropyLoss()
-    total_loss, correct, total = 0.0, 0, 0
+    total_loss = torch.tensor(0.0, device=device)
+    correct = torch.tensor(0, device=device)
+    total = 0
 
     with torch.no_grad():
         for batch in loader:
@@ -361,8 +379,8 @@ def evaluate(
             with _autocast(device, use_amp, amp_dtype):
                 out = model(x)
                 loss = criterion(out, y)
-            total_loss += loss.item() * len(y)
-            correct += (out.argmax(dim=1) == y).sum().item()
+            total_loss += loss.float() * len(y)
+            correct += (out.argmax(dim=1) == y).sum()
             total += len(y)
 
-    return total_loss / total, correct / total
+    return (total_loss / total).item(), (correct / total).item()

@@ -94,8 +94,8 @@ def run_comparison(args) -> dict:
         client_subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
 
     if args.use_fast_data:
-        client_loaders = make_fast_cifar10_loaders(client_subsets, args.batch_size)
-        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+        client_loaders = make_fast_cifar10_loaders(client_subsets, args.batch_size, device=device)
+        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size, device=device)
     else:
         client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
         test_loader = DataLoader(
