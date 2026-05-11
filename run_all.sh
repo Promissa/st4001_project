@@ -39,6 +39,7 @@ MAC_ALPHA="${MAC_ALPHA:-1.3}"
 MAC_CLIP="${MAC_CLIP:-3.0}"
 NOISE_SCALE="${NOISE_SCALE:-0.05}"
 DIR_CONC="${DIR_CONC:-0.1}"
+HEAVYTAIL_LOCAL_EPOCHS="${HEAVYTAIL_LOCAL_EPOCHS:-5}"
 AMP="${AMP:-1}"
 AMP_DTYPE="${AMP_DTYPE:-bf16}"
 CHANNELS_LAST="${CHANNELS_LAST:-1}"
@@ -256,7 +257,7 @@ alpha_ablation() {
     --model "$MODEL" \
     --rounds "$ABLATION_ROUNDS" \
     --num_clients "$NUM_CLIENTS" \
-    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS:-1}" \
+    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
     --batch_size "$COMPARE_BATCH_SIZE" \
     --server_lr "$SERVER_LR" \
     --local_lr "$LOCAL_LR" \
@@ -277,7 +278,7 @@ mac_compare() {
     --model "$MODEL" \
     --rounds "$ABLATION_ROUNDS" \
     --num_clients "$NUM_CLIENTS" \
-    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS:-1}" \
+    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
     --batch_size "$COMPARE_BATCH_SIZE" \
     --server_lr "$SERVER_LR" \
     --local_lr "$LOCAL_LR" \

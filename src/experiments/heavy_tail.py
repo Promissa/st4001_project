@@ -271,6 +271,8 @@ def run_trial(
 
     set_seed(seed)
     model = configure_model(get_model(args.model, num_classes=10), args, device)
+    if hasattr(torch, "compile"):
+        model = torch.compile(model)
     oracle = NoisyOracle(alpha=alpha, noise_scale=args.noise_scale, device=device)
     opt = build_optimizer(method, model, args, alpha)
 

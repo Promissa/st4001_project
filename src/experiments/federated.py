@@ -230,10 +230,15 @@ def run_round(
         for name, buf in global_model.named_buffers()
         if torch.is_floating_point(buf)
     }
-    global_state = global_model.state_dict()
+    global_params = list(global_model.parameters())
+    global_buffers = list(global_model.buffers())
 
     for loader in client_loaders:
-        local_model.load_state_dict(global_state)
+        with torch.no_grad():
+            for p_local, p_global in zip(local_model.parameters(), global_params):
+                p_local.copy_(p_global)
+            for b_local, b_global in zip(local_model.buffers(), global_buffers):
+                b_local.copy_(b_global)
         _train_local_model(
             local_model,
             loader,
