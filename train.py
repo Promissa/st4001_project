@@ -34,7 +34,7 @@ from src.data.datasets import (
     make_fast_cifar10_loaders,
     make_fast_cifar10_eval_loader,
 )
-from src.experiments.federated import run_round, evaluate, resolve_devices
+from src.experiments.federated import ClientParallelExecutor, run_round, evaluate, resolve_devices
 from src.models.nets import get_model
 from src.optimizers.adagrad_ota import AdaGradOTA
 from src.optimizers.adam_ota import AdamOTA
@@ -112,12 +112,20 @@ def parse_args():
     p.add_argument("--no_channels_last", dest="channels_last", action="store_false",
                    help="Disable channels-last memory format")
     p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--eval_every", type=int, default=5,
+                   help="Evaluate every K rounds, plus round 1 and the final round")
     p.add_argument("--compile_model", action="store_true", default=False,
                    help="Optionally torch.compile the global model in sequential mode")
     p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto",
                    help="Use cached tensor CIFAR-10 loaders with GPU batch transforms")
+    p.add_argument("--gpu_cache_data", dest="gpu_cache_data", action="store_true",
+                   default=None, help="Cache fast CIFAR tensors on each worker GPU")
+    p.add_argument("--no_gpu_cache_data", dest="gpu_cache_data", action="store_false",
+                   help="Keep fast CIFAR tensors on CPU")
     p.add_argument("--diagnostics_every", type=int, default=0,
                    help="Collect expensive finite/norm diagnostics every K rounds; 0 means first round only")
+    p.add_argument("--profile_every", type=int, default=0,
+                   help="Store worker timing/memory diagnostics every K rounds; 0 disables periodic profiling")
     # TensorBoard
     p.add_argument("--use_tensorboard", action="store_true", default=True,
                    help="Enable TensorBoard logging")
@@ -148,6 +156,10 @@ def main():
             or (args.fast_data == "auto" and device.type == "cuda")
         )
     )
+    if args.gpu_cache_data is None:
+        args.gpu_cache_data = bool(args.use_fast_data and device.type == "cuda")
+    args.eval_every = max(1, args.eval_every)
+    args.profile_every = max(0, args.profile_every)
 
     # Enable cuDNN autotuner for better convolution performance
     if torch.cuda.is_available():
@@ -197,7 +209,11 @@ def main():
     print(f"Clients:   N={args.num_clients} | Non-IID: {args.non_iid} (Dir={args.dir_conc})")
     print(f"MAC:       {args.use_mac}")
     print(f"AMP:       {args.amp} ({args.amp_dtype}) | channels_last={args.channels_last}")
-    print(f"Fast data: {args.use_fast_data} ({args.fast_data}) | diagnostics_every={args.diagnostics_every}")
+    print(
+        f"Fast data: {args.use_fast_data} ({args.fast_data}) | "
+        f"gpu_cache_data={args.gpu_cache_data} | eval_every={args.eval_every} | "
+        f"diagnostics_every={args.diagnostics_every} | profile_every={args.profile_every}"
+    )
     print()
 
     # Data
@@ -208,8 +224,16 @@ def main():
     else:
         subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
     if args.use_fast_data:
-        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
-        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+        client_loaders = make_fast_cifar10_loaders(
+            subsets,
+            args.batch_size,
+            gpu_cache=args.gpu_cache_data,
+        )
+        test_loader = make_fast_cifar10_eval_loader(
+            test_ds,
+            args.eval_batch_size,
+            gpu_cache=args.gpu_cache_data,
+        )
     else:
         client_loaders = [make_loader(s, args.batch_size) for s in subsets]
         test_loader = DataLoader(test_ds, batch_size=args.eval_batch_size,
@@ -228,64 +252,94 @@ def main():
     opt = build_optimizer(args.optimizer, model, args)
 
     loss_hist, acc_hist = [], []
-
-    for rnd in range(1, args.rounds + 1):
-        want_diagnostics = (
-            rnd == 1
-            or (args.diagnostics_every > 0 and rnd % args.diagnostics_every == 0)
-        )
-        diagnostics = run_round(
-            model, client_loaders, oracle, opt,
-            local_epochs=args.local_epochs,
+    eval_rounds = []
+    parallel_executor = None
+    can_persist_parallel = (
+        args.client_parallel == "auto"
+        and len(devices) > 1
+        and all(worker_device.type == "cuda" for worker_device in devices)
+    )
+    if can_persist_parallel:
+        parallel_executor = ClientParallelExecutor(
+            model,
+            client_loaders,
+            devices,
             local_lr=args.local_lr,
-            use_mac=args.use_mac,
-            mac_clip=args.mac_clip,
-            device=device,
-            return_diagnostics=want_diagnostics,
-            worker_devices=devices,
-            client_parallel=args.client_parallel,
             use_amp=args.amp,
             amp_dtype=args.amp_dtype,
             channels_last=args.channels_last,
         )
-        if diagnostics is None:
-            diagnostics = {"status": "ok"}
-        if rnd == 1 and diagnostics is not None:
-            worker_stats = diagnostics.get("worker_stats", [])
-            shard_text = ", ".join(
-                f"{stat.get('device')}={stat.get('clients')} clients"
-                for stat in worker_stats
-            )
-            time_text = ", ".join(
-                f"{stat.get('device')} {stat.get('local_seconds', 0.0):.2f}s"
-                for stat in worker_stats
-                if "local_seconds" in stat
-            )
-            print(f"Execution: {diagnostics.get('execution_path', 'unknown')} | {shard_text}")
-            if time_text:
-                print(f"Worker time: {time_text}")
-        if diagnostics.get("status") != "ok":
-            print(f"Stopped at round {rnd}: {diagnostics['status']}")
-            break
-        loss, acc = evaluate(
-            model, test_loader, device,
-            use_amp=args.amp,
-            amp_dtype=args.amp_dtype,
-            channels_last=args.channels_last,
-        )
-        if not np.isfinite(loss) or not np.isfinite(acc):
-            print(f"Stopped at round {rnd}: nonfinite_eval")
-            break
-        loss_hist.append(loss)
-        acc_hist.append(acc)
 
-        # TensorBoard logging
-        if writer is not None:
-            writer.add_scalar("test/loss", loss, rnd)
-            writer.add_scalar("test/accuracy", acc, rnd)
+    try:
+        for rnd in range(1, args.rounds + 1):
+            want_diagnostics = (
+                rnd == 1
+                or (args.diagnostics_every > 0 and rnd % args.diagnostics_every == 0)
+                or (args.profile_every > 0 and rnd % args.profile_every == 0)
+            )
+            diagnostics = run_round(
+                model, client_loaders, oracle, opt,
+                local_epochs=args.local_epochs,
+                local_lr=args.local_lr,
+                use_mac=args.use_mac,
+                mac_clip=args.mac_clip,
+                device=device,
+                return_diagnostics=want_diagnostics,
+                worker_devices=devices,
+                client_parallel=args.client_parallel,
+                use_amp=args.amp,
+                amp_dtype=args.amp_dtype,
+                channels_last=args.channels_last,
+                parallel_executor=parallel_executor,
+            )
+            if diagnostics is None:
+                diagnostics = {"status": "ok"}
+            if rnd == 1 or (args.profile_every > 0 and rnd % args.profile_every == 0):
+                worker_stats = diagnostics.get("worker_stats", [])
+                shard_text = ", ".join(
+                    f"{stat.get('device')}={stat.get('clients')} clients/{stat.get('samples')} samples"
+                    for stat in worker_stats
+                )
+                time_text = ", ".join(
+                    f"{stat.get('device')} {stat.get('local_seconds', 0.0):.2f}s"
+                    for stat in worker_stats
+                    if stat.get("local_seconds") is not None
+                )
+                print(f"Execution: {diagnostics.get('execution_path', 'unknown')} | {shard_text}")
+                if time_text:
+                    print(f"Worker time: {time_text}")
+            if diagnostics.get("status") != "ok":
+                print(f"Stopped at round {rnd}: {diagnostics['status']}")
+                break
 
-        if rnd % args.log_every == 0 or rnd == 1:
-            print(f"Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+            should_eval = rnd == 1 or rnd == args.rounds or rnd % args.eval_every == 0
+            if should_eval:
+                loss, acc = evaluate(
+                    model, test_loader, device,
+                    use_amp=args.amp,
+                    amp_dtype=args.amp_dtype,
+                    channels_last=args.channels_last,
+                )
+                if not np.isfinite(loss) or not np.isfinite(acc):
+                    print(f"Stopped at round {rnd}: nonfinite_eval")
+                    break
+                loss_hist.append(loss)
+                acc_hist.append(acc)
+                eval_rounds.append(rnd)
+
+                # TensorBoard logging
+                if writer is not None:
+                    writer.add_scalar("test/loss", loss, rnd)
+                    writer.add_scalar("test/accuracy", acc, rnd)
+
+            if rnd % args.log_every == 0 or rnd == 1:
+                if should_eval:
+                    print(f"Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+                else:
+                    print(f"Round {rnd:4d}/{args.rounds} | Eval: skipped")
+    finally:
+        if parallel_executor is not None:
+            parallel_executor.close()
 
     if loss_hist:
         print(f"\nFinal  | Loss: {loss_hist[-1]:.4f} | Acc: {acc_hist[-1]:.4f}")
@@ -303,6 +357,7 @@ def main():
         with open(out_dir / fname, "w") as f:
             json.dump({
                 "args": vars(args),
+                "eval_rounds": eval_rounds,
                 "loss": loss_hist,
                 "acc": acc_hist,
                 "final_acc": acc_hist[-1] if acc_hist else None,

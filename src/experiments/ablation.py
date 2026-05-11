@@ -41,7 +41,7 @@ from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
-from .federated import run_round, evaluate, resolve_devices
+from .federated import ClientParallelExecutor, run_round, evaluate, resolve_devices
 
 
 NOISE_SCALES = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
@@ -95,8 +95,16 @@ def _run_single(
                                          concentration=args.dir_conc,
                                          seed=args.seed)
     if args.use_fast_data:
-        client_loaders = make_fast_cifar10_loaders(client_subsets, args.batch_size)
-        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+        client_loaders = make_fast_cifar10_loaders(
+            client_subsets,
+            args.batch_size,
+            gpu_cache=args.gpu_cache_data,
+        )
+        test_loader = make_fast_cifar10_eval_loader(
+            test_ds,
+            args.eval_batch_size,
+            gpu_cache=args.gpu_cache_data,
+        )
     else:
         client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
         test_loader = DataLoader(
@@ -114,37 +122,65 @@ def _run_single(
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
     opt = _build_optimizer(optimizer_name, model, args)
-
-    loss_hist, acc_hist = [], []
-    for rnd in range(1, rounds + 1):
-        run_round(
+    parallel_executor = None
+    can_persist_parallel = (
+        args.client_parallel == "auto"
+        and len(args.worker_devices) > 1
+        and all(worker_device.type == "cuda" for worker_device in args.worker_devices)
+    )
+    if can_persist_parallel:
+        parallel_executor = ClientParallelExecutor(
             model,
             client_loaders,
-            oracle,
-            opt,
-            local_epochs=args.local_epochs,
+            args.worker_devices,
             local_lr=args.local_lr,
-            use_mac=args.use_mac,
-            device=device,
-            return_diagnostics=(rnd == 1),
-            worker_devices=args.worker_devices,
-            client_parallel=args.client_parallel,
             use_amp=args.amp,
             amp_dtype=args.amp_dtype,
             channels_last=args.channels_last,
         )
-        loss, acc = evaluate(
-            model,
-            test_loader,
-            device,
-            use_amp=args.amp,
-            amp_dtype=args.amp_dtype,
-            channels_last=args.channels_last,
-        )
-        loss_hist.append(loss)
-        acc_hist.append(acc)
 
-    return {"loss": loss_hist, "acc": acc_hist}
+    loss_hist, acc_hist = [], []
+    eval_rounds = []
+    try:
+        for rnd in range(1, rounds + 1):
+            run_round(
+                model,
+                client_loaders,
+                oracle,
+                opt,
+                local_epochs=args.local_epochs,
+                local_lr=args.local_lr,
+                use_mac=args.use_mac,
+                device=device,
+                return_diagnostics=(
+                    rnd == 1
+                    or (args.profile_every > 0 and rnd % args.profile_every == 0)
+                ),
+                worker_devices=args.worker_devices,
+                client_parallel=args.client_parallel,
+                use_amp=args.amp,
+                amp_dtype=args.amp_dtype,
+                channels_last=args.channels_last,
+                parallel_executor=parallel_executor,
+            )
+            should_eval = rnd == 1 or rnd == rounds or rnd % args.eval_every == 0
+            if should_eval:
+                loss, acc = evaluate(
+                    model,
+                    test_loader,
+                    device,
+                    use_amp=args.amp,
+                    amp_dtype=args.amp_dtype,
+                    channels_last=args.channels_last,
+                )
+                loss_hist.append(loss)
+                acc_hist.append(acc)
+                eval_rounds.append(rnd)
+    finally:
+        if parallel_executor is not None:
+            parallel_executor.close()
+
+    return {"loss": loss_hist, "acc": acc_hist, "eval_rounds": eval_rounds}
 
 
 def ablation_noise(args, device: torch.device) -> dict:
@@ -217,7 +253,12 @@ def parse_args():
                    default=None)
     p.add_argument("--no_channels_last", dest="channels_last", action="store_false")
     p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--eval_every", type=int, default=5)
     p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto")
+    p.add_argument("--gpu_cache_data", dest="gpu_cache_data", action="store_true", default=None)
+    p.add_argument("--no_gpu_cache_data", dest="gpu_cache_data", action="store_false")
+    p.add_argument("--diagnostics_every", type=int, default=0)
+    p.add_argument("--profile_every", type=int, default=0)
     return p.parse_args()
 
 
@@ -240,6 +281,10 @@ if __name__ == "__main__":
             or (args.fast_data == "auto" and device.type == "cuda")
         )
     )
+    if args.gpu_cache_data is None:
+        args.gpu_cache_data = bool(args.use_fast_data and device.type == "cuda")
+    args.eval_every = max(1, args.eval_every)
+    args.profile_every = max(0, args.profile_every)
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False

@@ -155,6 +155,7 @@ class FastCIFAR10Loader:
         batch_size: int,
         shuffle: bool,
         augment: bool,
+        gpu_cache: bool = False,
     ):
         if not hasattr(dataset, "data") or not hasattr(dataset, "targets"):
             raise TypeError("FastCIFAR10Loader requires a torchvision CIFAR10 dataset.")
@@ -172,9 +173,15 @@ class FastCIFAR10Loader:
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.augment = augment
+        self.gpu_cache = gpu_cache
         self.mean = torch.tensor(CIFAR10_MEAN, dtype=torch.float32).view(1, 3, 1, 1)
         self.std = torch.tensor(CIFAR10_STD, dtype=torch.float32).view(1, 3, 1, 1)
         self._norm_cache: dict[tuple[str, int | None], tuple[torch.Tensor, torch.Tensor]] = {}
+        self._gpu_cache: dict[tuple[str, int | None], tuple[torch.Tensor, torch.Tensor]] = {}
+
+    @property
+    def num_samples(self) -> int:
+        return len(self.targets)
 
     def __len__(self) -> int:
         return (len(self.targets) + self.batch_size - 1) // self.batch_size
@@ -184,17 +191,35 @@ class FastCIFAR10Loader:
         order = torch.randperm(n) if self.shuffle else torch.arange(n)
         for start in range(0, n, self.batch_size):
             batch_idx = order[start:start + self.batch_size]
+            if self.gpu_cache:
+                yield batch_idx, None
+                continue
             yield self.data[batch_idx], self.targets[batch_idx]
+
+    def _cached_data(self, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+        cache_key = (device.type, device.index)
+        if cache_key not in self._gpu_cache:
+            self._gpu_cache[cache_key] = (
+                self.data.to(device=device, non_blocking=False),
+                self.targets.to(device=device, non_blocking=False),
+            )
+        return self._gpu_cache[cache_key]
 
     def prepare_batch(
         self,
         x: torch.Tensor,
-        y: torch.Tensor,
+        y: torch.Tensor | None,
         device: torch.device,
         channels_last: bool = False,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        x = x.to(device, non_blocking=True).float().div_(255.0)
-        y = y.to(device, non_blocking=True)
+        if y is None:
+            data, targets = self._cached_data(device)
+            idx = x.to(device=device, non_blocking=True)
+            x = data.index_select(0, idx).float().div_(255.0)
+            y = targets.index_select(0, idx)
+        else:
+            x = x.to(device, non_blocking=True).float().div_(255.0)
+            y = y.to(device, non_blocking=True)
 
         if self.augment:
             x = _random_crop_flip_batch(x)
@@ -235,6 +260,7 @@ def make_fast_cifar10_loaders(
     subsets: list[Subset],
     batch_size: int,
     shuffle: bool = True,
+    gpu_cache: bool = False,
 ) -> list[FastCIFAR10Loader]:
     loaders = []
     for subset in subsets:
@@ -247,16 +273,22 @@ def make_fast_cifar10_loaders(
                 batch_size=batch_size,
                 shuffle=shuffle,
                 augment=True,
+                gpu_cache=gpu_cache,
             )
         )
     return loaders
 
 
-def make_fast_cifar10_eval_loader(dataset, batch_size: int) -> FastCIFAR10Loader:
+def make_fast_cifar10_eval_loader(
+    dataset,
+    batch_size: int,
+    gpu_cache: bool = False,
+) -> FastCIFAR10Loader:
     return FastCIFAR10Loader(
         dataset,
         indices=None,
         batch_size=batch_size,
         shuffle=False,
         augment=False,
+        gpu_cache=gpu_cache,
     )

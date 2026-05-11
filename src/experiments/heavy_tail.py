@@ -38,7 +38,7 @@ from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
-from .federated import run_round, evaluate, resolve_devices
+from .federated import ClientParallelExecutor, run_round, evaluate, resolve_devices
 
 
 DEFAULT_ALPHAS = [1.1, 1.3, 1.5, 1.7, 1.9, 2.0]
@@ -98,8 +98,16 @@ def _make_loaders(args, seed: int):
         subsets = iid_partition(train_ds, args.num_clients, seed=seed)
 
     if getattr(args, "use_fast_data", False):
-        client_loaders = make_fast_cifar10_loaders(subsets, args.batch_size)
-        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+        client_loaders = make_fast_cifar10_loaders(
+            subsets,
+            args.batch_size,
+            gpu_cache=getattr(args, "gpu_cache_data", False),
+        )
+        test_loader = make_fast_cifar10_eval_loader(
+            test_ds,
+            args.eval_batch_size,
+            gpu_cache=getattr(args, "gpu_cache_data", False),
+        )
     else:
         client_loaders = [make_loader(subset, args.batch_size) for subset in subsets]
         test_loader = DataLoader(
@@ -174,6 +182,9 @@ def _payload_matches_current_config(payload: dict, args) -> bool:
         "non_iid",
         "fast_data",
         "use_fast_data",
+        "gpu_cache_data",
+        "eval_every",
+        "profile_every",
     ]
     float_keys = [
         "server_lr",
@@ -268,84 +279,124 @@ def run_trial(
     opt = build_optimizer(method, model, args, alpha)
 
     loss_hist, acc_hist = [], []
+    eval_rounds = []
     diagnostics = []
     status = "ok"
     failed_round = None
+    completed_round = 0
 
-    for rnd in range(1, args.rounds + 1):
-        want_diagnostics = (
-            args.save_diagnostics
-            or rnd == 1
-            or (args.diagnostics_every > 0 and rnd % args.diagnostics_every == 0)
-        )
-        diag = run_round(
+    parallel_executor = None
+    can_persist_parallel = (
+        args.client_parallel == "auto"
+        and len(worker_devices) > 1
+        and all(worker_device.type == "cuda" for worker_device in worker_devices)
+    )
+    if can_persist_parallel:
+        parallel_executor = ClientParallelExecutor(
             model,
             client_loaders,
-            oracle,
-            opt,
-            local_epochs=args.local_epochs,
+            worker_devices,
             local_lr=args.local_lr,
-            use_mac=use_mac,
-            mac_clip=args.mac_clip,
-            device=device,
-            return_diagnostics=want_diagnostics,
-            worker_devices=worker_devices,
-            client_parallel=args.client_parallel,
             use_amp=args.amp,
             amp_dtype=args.amp_dtype,
             channels_last=args.channels_last,
         )
 
-        if diag is None:
-            diag = {"status": "ok"}
-
-        if args.save_diagnostics:
-            diagnostics.append({"round": rnd, **diag})
-
-        if rnd == 1:
-            worker_stats = diag.get("worker_stats", [])
-            shard_text = ", ".join(
-                f"{stat.get('device')}={stat.get('clients')} clients"
-                for stat in worker_stats
+    try:
+        for rnd in range(1, args.rounds + 1):
+            want_diagnostics = (
+                args.save_diagnostics
+                or rnd == 1
+                or (args.diagnostics_every > 0 and rnd % args.diagnostics_every == 0)
+                or (args.profile_every > 0 and rnd % args.profile_every == 0)
             )
-            time_text = ", ".join(
-                f"{stat.get('device')} {stat.get('local_seconds', 0.0):.2f}s"
-                for stat in worker_stats
-                if "local_seconds" in stat
+            diag = run_round(
+                model,
+                client_loaders,
+                oracle,
+                opt,
+                local_epochs=args.local_epochs,
+                local_lr=args.local_lr,
+                use_mac=use_mac,
+                mac_clip=args.mac_clip,
+                device=device,
+                return_diagnostics=want_diagnostics,
+                worker_devices=worker_devices,
+                client_parallel=args.client_parallel,
+                use_amp=args.amp,
+                amp_dtype=args.amp_dtype,
+                channels_last=args.channels_last,
+                parallel_executor=parallel_executor,
             )
-            print(f"  execution={diag.get('execution_path', 'unknown')} | {shard_text}", flush=True)
-            if time_text:
-                print(f"  worker_time={time_text}", flush=True)
 
-        if diag["status"] != "ok":
-            status = diag["status"]
-            failed_round = rnd
-            break
+            completed_round = rnd
+            if diag is None:
+                diag = {"status": "ok"}
 
-        loss, acc = evaluate(
-            model,
-            test_loader,
-            device,
-            use_amp=args.amp,
-            amp_dtype=args.amp_dtype,
-            channels_last=args.channels_last,
-        )
-        if not math.isfinite(loss) or not math.isfinite(acc):
-            status = "nonfinite_eval"
-            failed_round = rnd
-            break
+            if args.save_diagnostics or (args.profile_every > 0 and rnd % args.profile_every == 0):
+                diagnostics.append({"round": rnd, **diag})
 
-        loss_hist.append(float(loss))
-        acc_hist.append(float(acc))
+            if rnd == 1 or (args.profile_every > 0 and rnd % args.profile_every == 0):
+                worker_stats = diag.get("worker_stats", [])
+                shard_text = ", ".join(
+                    f"{stat.get('device')}={stat.get('clients')} clients/{stat.get('samples')} samples"
+                    for stat in worker_stats
+                )
+                time_text = ", ".join(
+                    f"{stat.get('device')} {stat.get('local_seconds', 0.0):.2f}s"
+                    for stat in worker_stats
+                    if stat.get("local_seconds") is not None
+                )
+                print(f"  execution={diag.get('execution_path', 'unknown')} | {shard_text}", flush=True)
+                if time_text:
+                    print(f"  worker_time={time_text}", flush=True)
 
-        if rnd % args.log_every == 0 or rnd == 1:
-            mac_label = "MAC" if use_mac else "no-MAC"
-            print(
-                f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
-                f"{method:<12} round {rnd:4d}/{args.rounds} "
-                f"loss={loss:.4f} acc={acc:.4f}",
-                flush=True,
+            if diag["status"] != "ok":
+                status = diag["status"]
+                failed_round = rnd
+                break
+
+            should_eval = (
+                rnd == 1
+                or rnd == args.rounds
+                or rnd % args.eval_every == 0
             )
+            if should_eval:
+                loss, acc = evaluate(
+                    model,
+                    test_loader,
+                    device,
+                    use_amp=args.amp,
+                    amp_dtype=args.amp_dtype,
+                    channels_last=args.channels_last,
+                )
+                if not math.isfinite(loss) or not math.isfinite(acc):
+                    status = "nonfinite_eval"
+                    failed_round = rnd
+                    break
+
+                loss_hist.append(float(loss))
+                acc_hist.append(float(acc))
+                eval_rounds.append(rnd)
+
+            if rnd % args.log_every == 0 or rnd == 1:
+                mac_label = "MAC" if use_mac else "no-MAC"
+                if should_eval:
+                    print(
+                        f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
+                        f"{method:<12} round {rnd:4d}/{args.rounds} "
+                        f"loss={loss:.4f} acc={acc:.4f}",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
+                        f"{method:<12} round {rnd:4d}/{args.rounds} eval=skipped",
+                        flush=True,
+                    )
+    finally:
+        if parallel_executor is not None:
+            parallel_executor.close()
 
     result = {
         "seed": seed,
@@ -355,7 +406,8 @@ def run_trial(
         "use_mac": use_mac,
         "mac_clip": args.mac_clip if use_mac else None,
         "rounds_requested": args.rounds,
-        "rounds_completed": len(acc_hist),
+        "rounds_completed": completed_round,
+        "eval_rounds": eval_rounds,
         "status": status,
         "nonfinite": status != "ok",
         "failed_round": failed_round,
@@ -365,7 +417,7 @@ def run_trial(
         "final_acc": acc_hist[-1] if acc_hist else None,
         "best_acc": max(acc_hist) if acc_hist else None,
     }
-    if args.save_diagnostics:
+    if diagnostics:
         result["diagnostics"] = diagnostics
     return result
 
@@ -480,11 +532,19 @@ def parse_args():
                    default=None)
     p.add_argument("--no_channels_last", dest="channels_last", action="store_false")
     p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--eval_every", type=int, default=5,
+                   help="Evaluate every K rounds, plus round 1 and the final round")
     p.add_argument("--compile_model", action="store_true", default=False)
     p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto",
                    help="Use cached tensor CIFAR-10 loaders with GPU batch transforms")
+    p.add_argument("--gpu_cache_data", dest="gpu_cache_data", action="store_true",
+                   default=None, help="Cache fast CIFAR tensors on each worker GPU")
+    p.add_argument("--no_gpu_cache_data", dest="gpu_cache_data", action="store_false",
+                   help="Keep fast CIFAR tensors on CPU")
     p.add_argument("--diagnostics_every", type=int, default=0,
                    help="Collect expensive finite/norm diagnostics every K rounds; 0 means first round only")
+    p.add_argument("--profile_every", type=int, default=0,
+                   help="Store worker timing/memory diagnostics every K rounds; 0 disables periodic profiling")
     return p.parse_args()
 
 
@@ -507,6 +567,10 @@ if __name__ == "__main__":
             or (args.fast_data == "auto" and device.type == "cuda")
         )
     )
+    if args.gpu_cache_data is None:
+        args.gpu_cache_data = bool(args.use_fast_data and device.type == "cuda")
+    args.eval_every = max(1, args.eval_every)
+    args.profile_every = max(0, args.profile_every)
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
@@ -516,7 +580,9 @@ if __name__ == "__main__":
     print(
         f"Accelerator: amp={args.amp} ({args.amp_dtype}) | "
         f"channels_last={args.channels_last} | fast_data={args.use_fast_data} "
-        f"({args.fast_data}) | diagnostics_every={args.diagnostics_every}",
+        f"({args.fast_data}) | gpu_cache_data={args.gpu_cache_data} | "
+        f"eval_every={args.eval_every} | diagnostics_every={args.diagnostics_every} | "
+        f"profile_every={args.profile_every}",
         flush=True,
     )
 

@@ -100,7 +100,7 @@ def _prepare_batch(
 def _prepare_loader_batch(
     loader: DataLoader,
     x: torch.Tensor,
-    y: torch.Tensor,
+    y: torch.Tensor | None,
     device: torch.device,
     channels_last: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -127,6 +127,40 @@ def _sum_float_buffers(
                 sums[name] = torch.zeros_like(value, device=device)
             sums[name].add_(value.to(device))
     return sums
+
+
+def _loader_num_samples(loader: DataLoader) -> int:
+    if hasattr(loader, "num_samples"):
+        return int(loader.num_samples)
+    targets = getattr(loader, "targets", None)
+    if targets is not None:
+        return len(targets)
+    dataset = getattr(loader, "dataset", None)
+    if dataset is not None:
+        return len(dataset)
+    try:
+        return len(loader)  # type: ignore[arg-type]
+    except TypeError:
+        return 0
+
+
+def _balanced_client_shards(
+    client_loaders: list[DataLoader],
+    num_shards: int,
+) -> list[list[DataLoader]]:
+    """Greedily balance shards by sample count, not just client count."""
+    shards: list[list[DataLoader]] = [[] for _ in range(num_shards)]
+    shard_sizes = [0 for _ in range(num_shards)]
+    weighted = sorted(
+        ((idx, loader, _loader_num_samples(loader)) for idx, loader in enumerate(client_loaders)),
+        key=lambda item: (-item[2], item[0]),
+    )
+
+    for _, loader, samples in weighted:
+        target = min(range(num_shards), key=lambda shard_idx: shard_sizes[shard_idx])
+        shards[target].append(loader)
+        shard_sizes[target] += samples
+    return shards
 
 
 def _finalize_round(
@@ -268,12 +302,14 @@ def _train_client_shard(
     use_amp: bool,
     amp_dtype: str,
     channels_last: bool,
+    collect_stats: bool = True,
 ) -> tuple[list[torch.Tensor], dict[str, torch.Tensor], int, dict]:
     """Train a shard of clients on one GPU, accumulating only summed deltas."""
     started = time.perf_counter()
     if device.type == "cuda":
         torch.cuda.set_device(device)
-        torch.cuda.reset_peak_memory_stats(device)
+        if collect_stats:
+            torch.cuda.reset_peak_memory_stats(device)
 
     base_model = copy.deepcopy(global_model).to(device)
     base_model = _maybe_channels_last(base_model, channels_last)
@@ -301,7 +337,7 @@ def _train_client_shard(
         for _ in range(local_epochs):
             for x, y in loader:
                 num_batches += 1
-                num_samples += int(y.numel())
+                num_samples += int(x.numel() if y is None else y.numel())
                 x, y = _prepare_loader_batch(loader, x, y, device, channels_last)
                 opt.zero_grad(set_to_none=True)
                 with _autocast(device, use_amp, amp_dtype):
@@ -316,7 +352,7 @@ def _train_client_shard(
                 if torch.is_floating_point(buf) and name in buffer_sums:
                     buffer_sums[name].add_(buf.detach())
 
-    if device.type == "cuda":
+    if device.type == "cuda" and collect_stats:
         torch.cuda.synchronize(device)
         memory_allocated_mb = torch.cuda.memory_allocated(device) / (1024 ** 2)
         peak_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
@@ -329,11 +365,167 @@ def _train_client_shard(
         "clients": len(loaders),
         "batches": num_batches,
         "samples": num_samples,
-        "local_seconds": time.perf_counter() - started,
+        "local_seconds": time.perf_counter() - started if collect_stats else None,
         "memory_allocated_mb": memory_allocated_mb,
         "peak_memory_mb": peak_memory_mb,
     }
     return delta_sums, buffer_sums, len(loaders), stats
+
+
+class _ClientShardWorker:
+    """Persistent per-GPU worker used by ClientParallelExecutor."""
+
+    def __init__(
+        self,
+        global_model: nn.Module,
+        loaders: list[DataLoader],
+        local_lr: float,
+        device: torch.device,
+        use_amp: bool,
+        amp_dtype: str,
+        channels_last: bool,
+    ):
+        self.loaders = loaders
+        self.local_lr = local_lr
+        self.device = device
+        self.use_amp = use_amp
+        self.amp_dtype = amp_dtype
+        self.channels_last = channels_last
+        self.samples = sum(_loader_num_samples(loader) for loader in loaders)
+
+        if device.type == "cuda":
+            torch.cuda.set_device(device)
+
+        self.base_model = copy.deepcopy(global_model).to(device)
+        self.base_model = _maybe_channels_last(self.base_model, channels_last)
+        self.base_model.eval()
+        self.local_model = copy.deepcopy(self.base_model).to(device)
+        self.local_model = _maybe_channels_last(self.local_model, channels_last)
+        self.opt = torch.optim.SGD(self.local_model.parameters(), lr=local_lr)
+        self.criterion = nn.CrossEntropyLoss()
+        self.delta_sums = [torch.zeros_like(p, device=device) for p in self.base_model.parameters()]
+        self.buffer_sums = {
+            name: torch.zeros_like(buf, device=device)
+            for name, buf in self.base_model.named_buffers()
+            if torch.is_floating_point(buf)
+        }
+
+    def run(
+        self,
+        global_model: nn.Module,
+        local_epochs: int,
+        collect_stats: bool,
+    ) -> tuple[list[torch.Tensor], dict[str, torch.Tensor], int, dict]:
+        started = time.perf_counter()
+        if self.device.type == "cuda":
+            torch.cuda.set_device(self.device)
+            if collect_stats:
+                torch.cuda.reset_peak_memory_stats(self.device)
+
+        self.base_model.load_state_dict(global_model.state_dict())
+        base_state = self.base_model.state_dict()
+        for tensor in self.delta_sums:
+            tensor.zero_()
+        for tensor in self.buffer_sums.values():
+            tensor.zero_()
+
+        num_batches = 0
+        num_samples = 0
+
+        for loader in self.loaders:
+            self.local_model.load_state_dict(base_state)
+            self.local_model.train()
+
+            for _ in range(local_epochs):
+                for x, y in loader:
+                    num_batches += 1
+                    if y is None:
+                        batch_samples = int(x.numel())
+                    else:
+                        batch_samples = int(y.numel())
+                    num_samples += batch_samples
+                    x, y = _prepare_loader_batch(loader, x, y, self.device, self.channels_last)
+                    self.opt.zero_grad(set_to_none=True)
+                    with _autocast(self.device, self.use_amp, self.amp_dtype):
+                        loss = self.criterion(self.local_model(x), y)
+                    loss.backward()
+                    self.opt.step()
+
+            with torch.no_grad():
+                for acc, bp, lp in zip(
+                    self.delta_sums,
+                    self.base_model.parameters(),
+                    self.local_model.parameters(),
+                ):
+                    acc.add_(bp.data - lp.data)
+                for name, buf in self.local_model.named_buffers():
+                    if torch.is_floating_point(buf) and name in self.buffer_sums:
+                        self.buffer_sums[name].add_(buf.detach())
+
+        if self.device.type == "cuda" and collect_stats:
+            torch.cuda.synchronize(self.device)
+            memory_allocated_mb = torch.cuda.memory_allocated(self.device) / (1024 ** 2)
+            peak_memory_mb = torch.cuda.max_memory_allocated(self.device) / (1024 ** 2)
+        else:
+            memory_allocated_mb = 0.0
+            peak_memory_mb = 0.0
+
+        stats = {
+            "device": str(self.device),
+            "clients": len(self.loaders),
+            "samples": num_samples,
+            "batches": num_batches,
+            "local_seconds": time.perf_counter() - started if collect_stats else None,
+            "memory_allocated_mb": memory_allocated_mb,
+            "peak_memory_mb": peak_memory_mb,
+        }
+        return self.delta_sums, self.buffer_sums, len(self.loaders), stats
+
+
+class ClientParallelExecutor:
+    """Persistent multi-GPU client simulator for repeated FL rounds."""
+
+    def __init__(
+        self,
+        global_model: nn.Module,
+        client_loaders: list[DataLoader],
+        worker_devices: list[torch.device],
+        local_lr: float,
+        use_amp: bool,
+        amp_dtype: str,
+        channels_last: bool,
+    ):
+        self.worker_devices = worker_devices
+        self.shards = _balanced_client_shards(client_loaders, len(worker_devices))
+        self.workers = [
+            _ClientShardWorker(
+                global_model,
+                shard,
+                local_lr,
+                worker_device,
+                use_amp,
+                amp_dtype,
+                channels_last,
+            )
+            for worker_device, shard in zip(worker_devices, self.shards)
+            if shard
+        ]
+        self.executor = ThreadPoolExecutor(max_workers=len(self.workers))
+
+    def run(
+        self,
+        global_model: nn.Module,
+        local_epochs: int,
+        collect_stats: bool,
+    ):
+        futures = [
+            self.executor.submit(worker.run, global_model, local_epochs, collect_stats)
+            for worker in self.workers
+        ]
+        return [future.result() for future in futures]
+
+    def close(self) -> None:
+        self.executor.shutdown(wait=True)
 
 
 def _run_round_parallel(
@@ -351,27 +543,37 @@ def _run_round_parallel(
     use_amp: bool,
     amp_dtype: str,
     channels_last: bool,
+    parallel_executor: ClientParallelExecutor | None = None,
 ) -> dict | None:
     N = len(client_loaders)
-    shards = [client_loaders[i::len(worker_devices)] for i in range(len(worker_devices))]
+    collect_worker_stats = return_diagnostics
 
-    with ThreadPoolExecutor(max_workers=len(worker_devices)) as executor:
-        futures = [
-            executor.submit(
-                _train_client_shard,
-                global_model,
-                shard,
-                local_epochs,
-                local_lr,
-                worker_device,
-                use_amp,
-                amp_dtype,
-                channels_last,
-            )
-            for worker_device, shard in zip(worker_devices, shards)
-            if shard
-        ]
-        shard_results = [future.result() for future in futures]
+    if parallel_executor is not None:
+        shard_results = parallel_executor.run(
+            global_model,
+            local_epochs,
+            collect_stats=collect_worker_stats,
+        )
+    else:
+        shards = _balanced_client_shards(client_loaders, len(worker_devices))
+        with ThreadPoolExecutor(max_workers=len(worker_devices)) as executor:
+            futures = [
+                executor.submit(
+                    _train_client_shard,
+                    global_model,
+                    shard,
+                    local_epochs,
+                    local_lr,
+                    worker_device,
+                    use_amp,
+                    amp_dtype,
+                    channels_last,
+                    collect_worker_stats,
+                )
+                for worker_device, shard in zip(worker_devices, shards)
+                if shard
+            ]
+            shard_results = [future.result() for future in futures]
 
     param_sums = [torch.zeros_like(p, device=device) for p in global_model.parameters()]
     buffer_sums: dict[str, torch.Tensor] = {}
@@ -389,6 +591,8 @@ def _run_round_parallel(
         worker_stats.append(stats)
 
     if device.type == "cuda":
+        # Keep this destination sync so the source worker buffers are not zeroed
+        # for the next round before queued cross-GPU reductions have consumed them.
         torch.cuda.synchronize(device)
 
     agg_grads = []
@@ -432,6 +636,7 @@ def run_round(
     use_amp: bool = False,
     amp_dtype: str = "bf16",
     channels_last: bool = False,
+    parallel_executor: ClientParallelExecutor | None = None,
 ) -> dict | None:
     """
     Execute one FL communication round, updating global_model in-place.
@@ -479,6 +684,7 @@ def run_round(
             use_amp,
             amp_dtype,
             channels_last,
+            parallel_executor,
         )
 
     # Step 2: client local updates (in practice parallel; simulated sequentially)
@@ -521,6 +727,7 @@ def run_round(
         diagnostics["worker_stats"] = [{
             "device": str(device),
             "clients": len(client_loaders),
+            "samples": sum(_loader_num_samples(loader) for loader in client_loaders),
         }]
     return diagnostics
 

@@ -37,7 +37,7 @@ from ..models.nets import get_model
 from ..optimizers.adagrad_ota import AdaGradOTA
 from ..optimizers.adam_ota import AdamOTA
 from ..optimizers.baselines import FedAvgOTA, FedAvgMOTA
-from .federated import run_round, evaluate, resolve_devices
+from .federated import ClientParallelExecutor, run_round, evaluate, resolve_devices
 
 
 def set_seed(seed: int) -> None:
@@ -85,6 +85,10 @@ def run_comparison(args) -> dict:
             or (args.fast_data == "auto" and device.type == "cuda")
         )
     )
+    if args.gpu_cache_data is None:
+        args.gpu_cache_data = bool(args.use_fast_data and device.type == "cuda")
+    args.eval_every = max(1, args.eval_every)
+    args.profile_every = max(0, args.profile_every)
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
@@ -92,7 +96,8 @@ def run_comparison(args) -> dict:
     print(f"Device: {device} | Workers: {[str(d) for d in worker_devices]}")
     print(
         f"Accelerator: amp={args.amp} ({args.amp_dtype}) | "
-        f"channels_last={args.channels_last} | fast_data={args.use_fast_data}"
+        f"channels_last={args.channels_last} | fast_data={args.use_fast_data} | "
+        f"gpu_cache_data={args.gpu_cache_data} | eval_every={args.eval_every}"
     )
     set_seed(args.seed)
 
@@ -106,8 +111,16 @@ def run_comparison(args) -> dict:
         client_subsets = iid_partition(train_ds, args.num_clients, seed=args.seed)
 
     if args.use_fast_data:
-        client_loaders = make_fast_cifar10_loaders(client_subsets, args.batch_size)
-        test_loader = make_fast_cifar10_eval_loader(test_ds, args.eval_batch_size)
+        client_loaders = make_fast_cifar10_loaders(
+            client_subsets,
+            args.batch_size,
+            gpu_cache=args.gpu_cache_data,
+        )
+        test_loader = make_fast_cifar10_eval_loader(
+            test_ds,
+            args.eval_batch_size,
+            gpu_cache=args.gpu_cache_data,
+        )
     else:
         client_loaders = [make_loader(s, args.batch_size) for s in client_subsets]
         test_loader = DataLoader(
@@ -125,7 +138,7 @@ def run_comparison(args) -> dict:
     )
 
     methods = ["fedavg", "fedavgm", "adagrad_ota", "adam_ota"]
-    results = {m: {"loss": [], "acc": []} for m in methods}
+    results = {m: {"loss": [], "acc": [], "eval_rounds": []} for m in methods}
 
     for method in methods:
         print(f"\n{'='*50}")
@@ -138,42 +151,74 @@ def run_comparison(args) -> dict:
         if args.channels_last:
             model = model.to(memory_format=torch.channels_last)
         opt = build_optimizer(method, model, args)
-
-        for rnd in range(1, args.rounds + 1):
-            diagnostics = run_round(
-                model, client_loaders, oracle, opt,
-                local_epochs=args.local_epochs,
-                local_lr=args.local_lr,
-                use_mac=args.use_mac,
-                mac_clip=args.mac_clip,
-                device=device,
-                return_diagnostics=(rnd == 1),
-                worker_devices=worker_devices,
-                client_parallel=args.client_parallel,
-                use_amp=args.amp,
-                amp_dtype=args.amp_dtype,
-                channels_last=args.channels_last,
-            )
-            if rnd == 1 and diagnostics is not None:
-                worker_stats = diagnostics.get("worker_stats", [])
-                shard_text = ", ".join(
-                    f"{stat.get('device')}={stat.get('clients')} clients"
-                    for stat in worker_stats
-                )
-                print(f"  Execution: {diagnostics.get('execution_path', 'unknown')} | {shard_text}")
-            loss, acc = evaluate(
+        parallel_executor = None
+        can_persist_parallel = (
+            args.client_parallel == "auto"
+            and len(worker_devices) > 1
+            and all(worker_device.type == "cuda" for worker_device in worker_devices)
+        )
+        if can_persist_parallel:
+            parallel_executor = ClientParallelExecutor(
                 model,
-                test_loader,
-                device,
+                client_loaders,
+                worker_devices,
+                local_lr=args.local_lr,
                 use_amp=args.amp,
                 amp_dtype=args.amp_dtype,
                 channels_last=args.channels_last,
             )
-            results[method]["loss"].append(loss)
-            results[method]["acc"].append(acc)
 
-            if rnd % args.log_every == 0 or rnd == 1:
-                print(f"  Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+        try:
+            for rnd in range(1, args.rounds + 1):
+                want_diagnostics = (
+                    rnd == 1
+                    or (args.profile_every > 0 and rnd % args.profile_every == 0)
+                )
+                diagnostics = run_round(
+                    model, client_loaders, oracle, opt,
+                    local_epochs=args.local_epochs,
+                    local_lr=args.local_lr,
+                    use_mac=args.use_mac,
+                    mac_clip=args.mac_clip,
+                    device=device,
+                    return_diagnostics=want_diagnostics,
+                    worker_devices=worker_devices,
+                    client_parallel=args.client_parallel,
+                    use_amp=args.amp,
+                    amp_dtype=args.amp_dtype,
+                    channels_last=args.channels_last,
+                    parallel_executor=parallel_executor,
+                )
+                if want_diagnostics and diagnostics is not None:
+                    worker_stats = diagnostics.get("worker_stats", [])
+                    shard_text = ", ".join(
+                        f"{stat.get('device')}={stat.get('clients')} clients/{stat.get('samples')} samples"
+                        for stat in worker_stats
+                    )
+                    print(f"  Execution: {diagnostics.get('execution_path', 'unknown')} | {shard_text}")
+
+                should_eval = rnd == 1 or rnd == args.rounds or rnd % args.eval_every == 0
+                if should_eval:
+                    loss, acc = evaluate(
+                        model,
+                        test_loader,
+                        device,
+                        use_amp=args.amp,
+                        amp_dtype=args.amp_dtype,
+                        channels_last=args.channels_last,
+                    )
+                    results[method]["loss"].append(loss)
+                    results[method]["acc"].append(acc)
+                    results[method]["eval_rounds"].append(rnd)
+
+                if rnd % args.log_every == 0 or rnd == 1:
+                    if should_eval:
+                        print(f"  Round {rnd:4d}/{args.rounds} | Loss: {loss:.4f} | Acc: {acc:.4f}")
+                    else:
+                        print(f"  Round {rnd:4d}/{args.rounds} | Eval: skipped")
+        finally:
+            if parallel_executor is not None:
+                parallel_executor.close()
 
     return results
 
@@ -213,7 +258,12 @@ def parse_args():
                    default=None)
     p.add_argument("--no_channels_last", dest="channels_last", action="store_false")
     p.add_argument("--eval_batch_size", type=int, default=1024)
+    p.add_argument("--eval_every", type=int, default=5)
     p.add_argument("--fast_data", choices=["auto", "on", "off"], default="auto")
+    p.add_argument("--gpu_cache_data", dest="gpu_cache_data", action="store_true", default=None)
+    p.add_argument("--no_gpu_cache_data", dest="gpu_cache_data", action="store_false")
+    p.add_argument("--diagnostics_every", type=int, default=0)
+    p.add_argument("--profile_every", type=int, default=0)
     return p.parse_args()
 
 

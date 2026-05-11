@@ -46,8 +46,11 @@ AMP="${AMP:-1}"
 AMP_DTYPE="${AMP_DTYPE:-bf16}"
 CHANNELS_LAST="${CHANNELS_LAST:-auto}"
 EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-1024}"
+EVAL_EVERY="${EVAL_EVERY:-5}"
 FAST_DATA="${FAST_DATA:-auto}"
+GPU_CACHE_DATA="${GPU_CACHE_DATA:-1}"
 DIAGNOSTICS_EVERY="${DIAGNOSTICS_EVERY:-0}"
+PROFILE_EVERY="${PROFILE_EVERY:-0}"
 TENSORBOARD="${TENSORBOARD:-0}"
 
 COMPARISON_DIR="${COMPARISON_DIR:-results/comparison}"
@@ -68,8 +71,10 @@ build_accelerator_flags() {
     --client_parallel "$CLIENT_PARALLEL"
     --amp_dtype "$AMP_DTYPE"
     --eval_batch_size "$EVAL_BATCH_SIZE"
+    --eval_every "$EVAL_EVERY"
     --fast_data "$FAST_DATA"
     --diagnostics_every "$DIAGNOSTICS_EVERY"
+    --profile_every "$PROFILE_EVERY"
   )
 
   if [[ "$AMP" == "0" || "$AMP" == "false" ]]; then
@@ -82,6 +87,12 @@ build_accelerator_flags() {
     1|true|yes) ACCELERATOR_FLAGS+=(--channels_last) ;;
     0|false|no) ACCELERATOR_FLAGS+=(--no_channels_last) ;;
   esac
+
+  if [[ "$GPU_CACHE_DATA" == "0" || "$GPU_CACHE_DATA" == "false" ]]; then
+    ACCELERATOR_FLAGS+=(--no_gpu_cache_data)
+  else
+    ACCELERATOR_FLAGS+=(--gpu_cache_data)
+  fi
 }
 
 build_tensorboard_flags() {
@@ -389,6 +400,37 @@ paper_like_compare() {
     "${ACCELERATOR_FLAGS[@]}"
 }
 
+dual4090_smoke() {
+  DEVICES="${DEVICES:-0,1}" \
+  CLIENT_PARALLEL="${CLIENT_PARALLEL:-auto}" \
+  FAST_DATA="${FAST_DATA:-on}" \
+  GPU_CACHE_DATA="${GPU_CACHE_DATA:-1}" \
+  PROFILE_EVERY="${PROFILE_EVERY:-1}" \
+  DIAGNOSTICS_EVERY="${DIAGNOSTICS_EVERY:-1}" \
+  ABLATION_ROUNDS=2 \
+  NUM_CLIENTS=20 \
+  SEEDS=42 \
+  ALPHA_VALUES=1.3 \
+  METHODS=adam_ota \
+  COMPARE_BATCH_SIZE="${COMPARE_BATCH_SIZE:-128}" \
+  alpha_ablation
+}
+
+dual4090_benchmark() {
+  DEVICES="${DEVICES:-0,1}" \
+  CLIENT_PARALLEL="${CLIENT_PARALLEL:-auto}" \
+  FAST_DATA="${FAST_DATA:-on}" \
+  GPU_CACHE_DATA="${GPU_CACHE_DATA:-1}" \
+  PROFILE_EVERY="${PROFILE_EVERY:-5}" \
+  DIAGNOSTICS_EVERY="${DIAGNOSTICS_EVERY:-0}" \
+  ABLATION_ROUNDS="${BENCHMARK_ROUNDS:-10}" \
+  SEEDS=42 \
+  ALPHA_VALUES="${ALPHA_VALUES:-1.3}" \
+  METHODS="${METHODS:-adam_ota}" \
+  COMPARE_BATCH_SIZE="${COMPARE_BATCH_SIZE:-128}" \
+  alpha_ablation
+}
+
 help() {
   cat <<'EOF'
 Usage:
@@ -415,6 +457,8 @@ Core project modules:
   mac_compare         Run MAC vs no-MAC under alpha-stable interference.
   core_heavytail      Run alpha_sanity, alpha_ablation, mac_compare, paper_update.
   paper_update        Generate alpha/MAC figures and LaTeX tables from JSON.
+  dual4090_smoke      2-round dual-GPU smoke/profile run.
+  dual4090_benchmark  Short dual-GPU wall-time/profile benchmark.
 
 Optional extension modules:
   heavy_tail_compare  Legacy one-off alpha-stable comparison.
@@ -425,14 +469,15 @@ Common overrides:
   ROUNDS=20 ABLATION_ROUNDS=10 ./run_all.sh workflow
   NUM_CLIENTS=10 MODEL=convnet ROUNDS=20 ./run_all.sh compare_cifar
   ABLATION_ROUNDS=20 SEEDS=42 ALPHA_VALUES=1.3,1.7,2.0 ./run_all.sh core_heavytail
-  FAST_DATA=on DIAGNOSTICS_EVERY=0 TENSORBOARD=0 ./run_all.sh alpha_ablation
+  FAST_DATA=on GPU_CACHE_DATA=1 DIAGNOSTICS_EVERY=0 TENSORBOARD=0 ./run_all.sh alpha_ablation
+  CUDA_VISIBLE_DEVICES=0,1 DEVICES=0,1 CLIENT_PARALLEL=auto ./run_all.sh dual4090_smoke
 EOF
 }
 
 main() {
   local module="${1:-help}"
   case "$module" in
-    runall|workflow|quickcheck|setup|data|train|train_mnist|train_cifar|compare|compare_mnist|compare_cifar|ablation|ablation_noise|ablation_clients|plot|alpha_sanity|alpha_ablation|mac_compare|core_heavytail|paper_update|heavy_tail_compare|paper_like_compare|help)
+    runall|workflow|quickcheck|setup|data|train|train_mnist|train_cifar|compare|compare_mnist|compare_cifar|ablation|ablation_noise|ablation_clients|plot|alpha_sanity|alpha_ablation|mac_compare|core_heavytail|paper_update|heavy_tail_compare|paper_like_compare|dual4090_smoke|dual4090_benchmark|help)
       "$module"
       ;;
     *)

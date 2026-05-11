@@ -53,13 +53,13 @@ def plot_comparison(result_path: str, out_dir: Path):
 
     args_d = data["args"]
     results = data["results"]
-    rounds = list(range(1, args_d["rounds"] + 1))
 
     _set_style()
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
     for method, hist in results.items():
         s = METHOD_STYLE.get(method, {"label": method, "color": "gray", "ls": "-", "lw": 1.5})
+        rounds = hist.get("eval_rounds") or list(range(1, len(hist["acc"]) + 1))
         ax1.plot(rounds, hist["acc"], label=s["label"], color=s["color"],
                  ls=s["ls"], lw=s["lw"])
         ax2.plot(rounds, hist["loss"], label=s["label"], color=s["color"],
@@ -151,11 +151,9 @@ def plot_ablation_clients(result_path: str, out_dir: Path):
 
     # Full training curves colored by N
     cmap = plt.cm.viridis(np.linspace(0.2, 0.9, len(Ns)))
-    rounds_count = len(next(iter(results.values()))["acc"])
-    rounds = list(range(1, rounds_count + 1))
-
     for N, color in zip(Ns, cmap):
         r = results[str(N)]
+        rounds = r.get("eval_rounds") or list(range(1, len(r["acc"]) + 1))
         ax1.plot(rounds, r["acc"], label=f"N={N}", color=color, lw=2)
         ax2.plot(rounds, r["loss"], label=f"N={N}", color=color, lw=2)
 
