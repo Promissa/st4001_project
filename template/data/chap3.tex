@@ -1,41 +1,40 @@
 \chapter{System Design and Methodology}
 
 \section{Training Loop}
-The simulator follows the standard synchronous FL round structure. At round
-$t$, the server broadcasts the global model $w_t$ to all clients. Each client
-copies the global model, trains locally for $E$ epochs using stochastic
-gradient descent, and returns a pseudo-gradient
+\ \ \ \ \, The simulator follows the standard synchronous FL round structure. At round
+$t$, the server broadcasts the global model $w^t$ to all clients. Each client
+copies the global model, trains locally for $E$ epochs using SGD and returns a pseudo-gradient $\Delta_n^t$:
 \begin{equation}
-    \Delta_{n,t} = w_t - w_{n,t}^{(E)}.
+    \Delta_n^t = w^t - [w_n^t]^{(E)}
 \end{equation}
-This pseudo-gradient is the parameter difference between the broadcast model
-and the locally trained client model. It approximates the accumulated local
-descent direction.
-
-The OTA oracle then aggregates the client pseudo-gradients. In the
-implemented alpha-stable setting,
+which approximates the accumulated local descent direction. The OTA oracle then aggregates the client pseudo-gradients. In the
+implemented $\alpha$-stable setting,
 \begin{equation}
-    \tilde{g}_t =
+    \tilde{g}^t =
     \frac{1}{N}
-    \left(\sum_{n=1}^{N} \Delta_{n,t} + \xi_t\right),
+    \left(\sum_{n=1}^{N} \Delta_n^t + \xi^t\right),
     \quad
-    \xi_t \sim S\alpha S(\gamma),
+    \xi^t \sim S\alpha S(\gamma),
 \end{equation}
-where $S\alpha S(\gamma)$ denotes a symmetric alpha-stable random vector with
+where $S\alpha S(\gamma)$ denotes a symmetric $\alpha$-stable random vector with
 tail index $\alpha$ and scale $\gamma$. The special case $\alpha=2$
 corresponds to AWGN with standard deviation $\sqrt{2}\gamma$ under the
-sampler convention. The optimizer receives $\tilde{g}_t$ and updates the
+sampler convention. The optimizer receives $\tilde{g}^t$ and updates the
 global model in place.
 
 \section{Median Anchored Clipping}
 The simulator includes Median Anchored Clipping (MAC) as a robust
 pre-processing step before the server optimizer. For an aggregated vector
-$\tilde{g}_t$, MAC computes the coordinate median $m$, the median absolute
-deviation $r=\mathrm{median}(|\tilde{g}_t-m|)$, and clips each coordinate to
-the interval
+$\tilde{g}^t\in\mathbb{R}^n$, MAC computes the coordinate median entry $m$ by
+
 \begin{equation}
-    [m-k r,\; m+k r],
+    m=\text{median}\{\tilde{g}_i^t, i\in\{1,2,\dots,d\}\}
 \end{equation}
+and then clip each entry $\tilde{g}_i^t$ by
+\begin{equation}
+    \tilde{g}_i^t\leftarrow \min\{|\tilde{g}_i^t|-m,\}
+\end{equation}
+
 where $k$ is the clipping factor. The default setting is $k=3$. MAC is
 expected to have little effect in the Gaussian endpoint, but it can reduce
 rare impulsive coordinates when $\alpha<2$.
@@ -66,7 +65,7 @@ coordinate-wise magnitude $v_t$:
 \end{align}
 For $\alpha=2$, the denominator reduces to the usual square-root AdaGrad
 normalization. For $\alpha<2$, the same form follows the fractional
-alpha-stable accumulation rule used in the reference paper. Because $v_t$ is
+$\alpha$-stable accumulation rule used in the reference paper. Because $v_t$ is
 monotone increasing, AdaGrad-OTA tends to become conservative over long runs.
 This can stabilize noisy training, but it may also slow late-stage
 convergence.
@@ -126,10 +125,10 @@ contains the noisy aggregation oracle and noise sampler. The data layer
 contains dataset loading and client partitioning. The model layer contains
 classification networks. The optimizer layer contains the four server
 optimizers. The experiment layer contains single-run training, method
-comparison, ablation, plotting, logging, and result export.
+comparison, ablation, plotting, logging and result export.
 
 This organization supports the project goal in two ways. First, the
-alpha-stable experiments and MAC comparisons can be run reproducibly through
+$\alpha$-stable experiments and MAC comparisons can be run reproducibly through
 command-line scripts. Second, the same interfaces can later be used to add
 richer physical channel models, additional datasets, or stricter reproduction
 settings without rewriting the training loop.

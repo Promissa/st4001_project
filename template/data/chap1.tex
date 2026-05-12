@@ -1,28 +1,27 @@
 \chapter{Introduction}
 
 \section{Motivation}
-Federated learning (FL) trains a shared model across distributed clients
+\ \ \ \ \, Federated learning (FL) trains a shared model across distributed clients
 without requiring the clients to upload their raw data. This design is
 attractive for edge intelligence because it reduces privacy exposure and
-keeps data near the devices that generate it. A standard FL round broadcasts
-the current global model, lets clients run local optimization, and aggregates
-their local updates on a central server. The FedAvg algorithm is the classic
+keeps data near its source device. A standard FL round includes broadcasting current global model, 
+letting clients run local optimization and aggregates
+their updates on a central server. The FedAvg algorithm is the classic
 example of this workflow and remains the baseline for many FL systems
 \citep{mcmahan2017communication}.
 
 The communication cost of conventional digital FL grows with the number of
-clients because each participating client must send an update to the server.
+clients because each client must send an update to the server separately.
 Analog over-the-air aggregation changes the communication model. If clients
-transmit analog update waveforms at the same time, the wireless
-multiple-access channel physically superposes the signals. The server can
-then observe an aggregate update in one shared channel use instead of
-decoding each client separately. This makes OTA-FL a promising architecture
-for large-scale wireless learning.
-
-The difficulty is that the same wireless channel also injects noise,
-interference, and possible fading. The server therefore receives a corrupted
+transmit the updates in analog waveforms at the same time, the wireless
+multiple-access channel physically superposes the signals, then server can
+only observe an aggregate update in one shared channel use and fail to
+decode each client separately. This makes OTA-FL a promising architecture
+for large-scale wireless learning, yet with a main obstacle that 
+same wireless channel can also injects noise, interference, and possible fading. 
+The server therefore receives a corrupted
 aggregate rather than the exact average update. When a plain FedAvg-style
-server update uses this noisy vector directly, heavy-tailed impulsive
+server updates using this noisy vector directly, heavy-tailed impulsive
 interference can cause slow convergence, oscillation, or divergence. The
 reference work ``Adaptive Federated Learning Over the Air'' studies this
 problem for adaptive methods under fading and alpha-stable interference
@@ -31,16 +30,17 @@ alpha-stable tail index a core experimental variable; AWGN is treated as the
 special case $\alpha=2$.
 
 \section{Problem Statement}
-This thesis studies FL over a simulated analog OTA aggregation channel.
-At communication round $t$, the server receives a noisy aggregate
+\ \ \ \ \, This thesis studies FL over a simulated analog OTA aggregation channel.
+At communication round $t$, the server receives a noisy aggregate update $\tilde{g}^t$:
 \begin{equation}
-    \tilde{g}_t =
-    \frac{1}{N}\left(\sum_{n=1}^{N} \Delta_{n,t} + \xi_t\right),
+    \tilde{g}^t =
+    \frac{1}{N}\left(\sum_{n=1}^{N} \Delta_n^t + \xi^t\right),
 \end{equation}
-where $N$ is the number of clients, $\Delta_{n,t}$ is the update produced by
-client $n$, and $\xi_t$ is symmetric alpha-stable channel noise. Smaller
-$\alpha$ means heavier tails and more frequent impulsive outliers; $\alpha=2$
-recovers the Gaussian AWGN case. The central question is whether adaptive
+where $N$ denotes the number of clients, $\Delta_n^t$ denotes the update produced by
+client $n$, and $\xi^t$ denotes symmetric alpha-stable channel noise.
+
+When $\alpha<2$, smaller $\alpha$ means heavier tails and more frequent impulsive outliers, while $\alpha=2$ 
+ recovers the Gaussian AWGN case. The central question is whether adaptive
 server optimizers can use their historical first- and second-moment states to
 make the training process more robust to this noisy aggregate.
 

@@ -26,10 +26,14 @@ modular dataset partitioning; a noisy OTA aggregation oracle based on the
 Chambers-Mallows-Stuck alpha-stable sampler; Median Anchored Clipping (MAC)
 as robust pre-processing; JSON result export; and plotting scripts. The
 revised experiments prioritize CIFAR-10 tail-index ablations and MAC
-comparisons, with MNIST used as a lightweight sanity benchmark. The project
-is not a full line-by-line reproduction of the reference paper, but it
-implements the core heavy-tail setting needed to evaluate whether adaptive
-server normalization improves OTA-FL robustness.
+comparisons, with MNIST used as a lightweight sanity benchmark. In the
+three-seed CIFAR-10 alpha sweep, AdaGrad-OTA and Adam-OTA substantially
+outperform FedAvg-OTA and FedAvgM-OTA under the implemented heavy-tail
+setting, although the observed alpha trend is not monotonic and the MAC
+comparison is neutral. The project is therefore not a full line-by-line
+reproduction of the reference paper, but it implements the core heavy-tail
+setting needed to evaluate a carefully scoped adaptive OTA-FL robustness
+claim.
 
 \noindent\textbf{Keywords:} federated learning; over-the-air aggregation;
 alpha-stable noise; heavy-tailed interference; adaptive optimization; MAC

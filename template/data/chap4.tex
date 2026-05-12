@@ -167,7 +167,7 @@ when the channel has impulsive tails.
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=0.95\textwidth]{../results/figures/cifar10_resnet18_alpha2.0_N100_curves.png}
-    \caption{CIFAR-10 comparison curves for FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, and Adam-OTA.}
+    \caption{CIFAR-10 comparison curves for FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, and Adam-OTA. The loss panel uses a logarithmic y-axis because AdaGrad-OTA and Adam-OTA have very large but finite early-round transient test losses before recovering.}
     \label{fig:cifar-curves}
 \end{figure}
 
@@ -186,6 +186,9 @@ only varying the AWGN scale. The endpoint $\alpha=2$ is Gaussian AWGN, while
 smaller values of $\alpha$ produce heavier-tailed impulsive interference.
 This is the setting where adaptive normalization is most meaningful: a
 server method must handle rare but very large aggregate perturbations.
+All configurations in this table complete the full 100 communication rounds
+for all three seeds without non-finite model values, so the comparison is not
+affected by early termination.
 
 \IfFileExists{data/generated/alpha_ablation_table.tex}{
     \input{data/generated/alpha_ablation_table}
@@ -219,10 +222,27 @@ server method must handle rare but very large aggregate perturbations.
     \label{fig:alpha-ablation}
 \end{figure}
 
-The expected qualitative pattern is that convergence becomes slower and less
-stable as $\alpha$ decreases. The adaptive methods should be interpreted
-through this heavy-tail curve rather than through an AWGN-only sweep over
-$\gamma$.
+Table \ref{tab:alpha-ablation} shows a clear separation between methods, but
+not a simple monotonic degradation with smaller $\alpha$. FedAvg-OTA stays
+near random guessing at about 11.9\% final accuracy across the full sweep.
+FedAvgM-OTA is more stable but remains around 20.5--20.7\%. In contrast, the
+adaptive methods are substantially stronger in this 100-round non-IID
+CIFAR-10 setting. AdaGrad-OTA reaches 49.52--51.75\% for $\alpha<2$, compared
+with 43.88\% at the AWGN endpoint. Adam-OTA reaches 42.88--44.82\% for
+$\alpha<2$, compared with 39.89\% at $\alpha=2$.
+
+The result therefore supports a narrower claim: server-side second-moment
+normalization is much more effective than plain FedAvg or FedAvgM in the
+implemented heavy-tail experiment. However, it does not reproduce the
+stronger qualitative pattern that smaller $\alpha$ always causes slower
+training. The best AdaGrad-OTA result appears at $\alpha=1.5$, and the best
+Adam-OTA result appears at $\alpha=1.3$. This non-monotonic behavior may
+come from the fixed learning rate, the fixed scale $\gamma=0.05$, the use of
+the same $\alpha$ in both the channel sampler and the adaptive denominator,
+or the limited 100-round training budget. For this reason, the alpha
+ablation should be treated as evidence for adaptive robustness relative to
+the implemented baselines, not as a full reproduction of the reference
+paper's tail-index convergence trend.
 
 \section{MAC Robust Pre-Processing}
 The second revised experiment compares training with and without Median
@@ -262,6 +282,17 @@ effect of rare impulsive coordinates when $\alpha<2$.
     \caption{CIFAR-10 comparison of no-MAC and MAC under alpha-stable interference.}
     \label{fig:mac-compare}
 \end{figure}
+
+In the completed MAC comparison, clipping does not create a meaningful
+accuracy improvement. FedAvg-OTA and FedAvgM-OTA change by less than 0.1
+percentage points. AdaGrad-OTA changes from 50.35\% to 50.37\%, which is
+negligible relative to the seed variation. Adam-OTA decreases from 45.09\%
+to 44.40\%. Therefore, MAC should be reported as an implemented and tested
+robust pre-processing component, but the current evidence does not support a
+claim that MAC improves CIFAR-10 accuracy under this particular
+$\alpha=1.3$, $\gamma=0.05$, $k=3$ setting. A stronger MAC conclusion would
+require a sweep over clipping factor, noise scale, and possibly a more
+impulsive operating point.
 
 \section{Client-Count Ablation}
 Table \ref{tab:client-ablation} reports the Adam-OTA client-count
@@ -311,3 +342,14 @@ when the aggregate update is corrupted by alpha-stable impulsive noise. If
 adaptive methods underperform FedAvgM-OTA in some CIFAR-10 settings, that is
 not a contradiction; it indicates that aggressive normalization can compress
 useful signal as well as channel noise.
+
+The final evidential strength is mixed. The strongest supported observation
+is empirical: under the heavy-tail CIFAR-10 sweep, AdaGrad-OTA and Adam-OTA
+outperform FedAvg-OTA and FedAvgM-OTA by a large margin. The weaker parts of
+the argument are the mechanism and the robustness-preprocessing claim. The
+current results do not directly plot the second-moment accumulator or the
+effective learning rate, and the MAC experiment is essentially neutral.
+Consequently, the paper can defend a scoped undergraduate-thesis conclusion
+about an implemented adaptive OTA-FL simulator and its empirical behavior,
+but it should not claim a complete reproduction or a definitive validation of
+all mechanisms in the reference paper.

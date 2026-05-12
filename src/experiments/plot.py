@@ -64,6 +64,25 @@ def plot_comparison(result_path: str, out_dir: Path):
         ax2.plot(rounds, hist["loss"], label=s["label"], color=s["color"],
                  ls=s["ls"], lw=s["lw"])
 
+    finite_losses = [
+        value
+        for hist in results.values()
+        for value in hist.get("loss", [])
+        if np.isfinite(value) and value > 0
+    ]
+    if finite_losses and max(finite_losses) / max(min(finite_losses), 1e-12) > 100:
+        ax2.set_yscale("log")
+        ax2.text(
+            0.02,
+            0.96,
+            "log scale",
+            transform=ax2.transAxes,
+            va="top",
+            ha="left",
+            fontsize=10,
+            bbox={"boxstyle": "round,pad=0.2", "facecolor": "white", "alpha": 0.75, "edgecolor": "none"},
+        )
+
     title_suffix = (f"{args_d['dataset'].upper()}, "
                     f"γ={args_d['noise_scale']}, N={args_d['num_clients']}")
 
@@ -74,8 +93,8 @@ def plot_comparison(result_path: str, out_dir: Path):
     ax1.grid(alpha=0.3)
 
     ax2.set_xlabel("Communication Rounds")
-    ax2.set_ylabel("Training Loss")
-    ax2.set_title(f"Training Loss — {title_suffix}")
+    ax2.set_ylabel("Test Loss")
+    ax2.set_title(f"Test Loss — {title_suffix}")
     ax2.legend()
     ax2.grid(alpha=0.3)
 
@@ -121,7 +140,7 @@ def plot_ablation_noise(result_path: str, out_dir: Path):
 
     ax2.set_xscale("log")
     ax2.set_xlabel("Noise scale γ (log)")
-    ax2.set_ylabel("Final Training Loss")
+    ax2.set_ylabel("Final Test Loss")
     ax2.set_title("Effect of AWGN Noise Scale on Final Loss")
     ax2.legend()
     ax2.grid(alpha=0.3, which="both")
@@ -165,8 +184,8 @@ def plot_ablation_clients(result_path: str, out_dir: Path):
     ax1.grid(alpha=0.3)
 
     ax2.set_xlabel("Communication Rounds")
-    ax2.set_ylabel("Training Loss")
-    ax2.set_title("Scalability: Training Loss vs Rounds (Adam-OTA)")
+    ax2.set_ylabel("Test Loss")
+    ax2.set_title("Scalability: Test Loss vs Rounds (Adam-OTA)")
     ax2.legend()
     ax2.grid(alpha=0.3)
 
@@ -201,7 +220,7 @@ def plot_alpha_ablation(result_path: str, out_dir: Path):
     for opt_name, style in OPT_STYLE.items():
         means, stds, xs = [], [], []
         for alpha in alphas:
-            block = results[str(alpha)].get(opt_name)
+            block = results[f"{alpha:g}"].get(opt_name)
             if not block:
                 continue
             mean, std = _summary_mean_std(block, "final_acc")
