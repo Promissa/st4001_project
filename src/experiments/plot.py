@@ -294,6 +294,104 @@ def plot_mac_compare(result_path: str, out_dir: Path):
     plt.close()
 
 
+def plot_lr_sweep(result_path: str, out_dir: Path):
+    """Final accuracy vs server learning rate, one curve per method (mean ± std)."""
+    with open(result_path) as f:
+        data = json.load(f)
+
+    results = data["results"]
+    lrs = sorted(float(k) for k in results)
+
+    _set_style()
+    fig, ax = plt.subplots(1, 1, figsize=(7.5, 4.8))
+
+    for opt_name, style in OPT_STYLE.items():
+        means, stds, xs = [], [], []
+        for lr in lrs:
+            block = results[f"{lr:g}"].get(opt_name)
+            if not block:
+                continue
+            mean, std = _summary_mean_std(block, "final_acc")
+            if mean is None:
+                continue
+            xs.append(lr)
+            means.append(mean)
+            stds.append(std or 0.0)
+        if xs:
+            ax.errorbar(xs, means, yerr=stds, label=style["label"],
+                        color=style["color"], marker=style["marker"],
+                        lw=2, capsize=3)
+
+    ax.set_xscale("log")
+    alpha = data.get("mac_alpha", data.get("args", {}).get("mac_alpha", "?"))
+    gamma = data.get("noise_scale", data.get("args", {}).get("noise_scale", "?"))
+    ax.set_xlabel(r"Server learning rate $\eta$ (log)")
+    ax.set_ylabel("Final Test Accuracy")
+    ax.set_title(rf"Server LR sweep ($\alpha$={alpha}, $\gamma$={gamma})")
+    ax.legend()
+    ax.grid(alpha=0.3, which="both")
+
+    plt.tight_layout()
+    stem = Path(result_path).stem
+    out = out_dir / f"{stem}_plot.png"
+    plt.savefig(out, bbox_inches="tight")
+    print(f"Saved: {out}")
+    plt.close()
+
+
+def plot_mac_sweep(result_path: str, out_dir: Path):
+    """Heatmap of final accuracy across (clip factor k, noise scale γ) for each method."""
+    with open(result_path) as f:
+        data = json.load(f)
+
+    results = data["results"]
+    gammas = sorted(float(g) for g in results)
+    ks = sorted({float(k) for g_key in results for k in results[g_key].keys()})
+    methods = [m for m in OPT_STYLE if any(
+        m in results[f"{g:g}"].get(f"{k:g}", {})
+        for g in gammas for k in ks
+    )]
+    if not methods:
+        print(f"No methods found in {result_path}")
+        return
+
+    _set_style()
+    fig, axes = plt.subplots(1, len(methods), figsize=(4.2 * len(methods), 4.2),
+                             squeeze=False)
+    for idx, method in enumerate(methods):
+        ax = axes[0, idx]
+        grid = np.full((len(gammas), len(ks)), np.nan)
+        for i, g in enumerate(gammas):
+            for j, k in enumerate(ks):
+                block = results[f"{g:g}"].get(f"{k:g}", {}).get(method)
+                mean, _ = _summary_mean_std(block or {}, "final_acc")
+                if mean is not None:
+                    grid[i, j] = mean
+        im = ax.imshow(grid, origin="lower", cmap="viridis", aspect="auto")
+        ax.set_xticks(range(len(ks)), [f"{k:g}" for k in ks])
+        ax.set_yticks(range(len(gammas)), [f"{g:g}" for g in gammas])
+        ax.set_xlabel("Clip factor k  (0 = no MAC)")
+        ax.set_ylabel(r"Noise scale $\gamma$")
+        ax.set_title(OPT_STYLE[method]["label"])
+        for i in range(len(gammas)):
+            for j in range(len(ks)):
+                if np.isfinite(grid[i, j]):
+                    ax.text(j, i, f"{grid[i, j] * 100:.1f}",
+                            ha="center", va="center",
+                            color="white" if grid[i, j] < 0.4 else "black",
+                            fontsize=9)
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    alpha = data.get("args", {}).get("mac_alpha", "?")
+    fig.suptitle(rf"MAC sweep: final accuracy at $\alpha$={alpha}")
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    stem = Path(result_path).stem
+    out = out_dir / f"{stem}_plot.png"
+    plt.savefig(out, bbox_inches="tight")
+    print(f"Saved: {out}")
+    plt.close()
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="Plot ADOTA-FL experiment results")
     p.add_argument("--result", type=str, default=None,
@@ -306,6 +404,10 @@ def parse_args():
                    help="Path to alpha-stable ablation JSON")
     p.add_argument("--mac_compare", type=str, default=None,
                    help="Path to MAC comparison JSON")
+    p.add_argument("--lr_sweep", type=str, default=None,
+                   help="Path to LR sweep JSON")
+    p.add_argument("--mac_sweep", type=str, default=None,
+                   help="Path to MAC k×γ sweep JSON")
     p.add_argument("--out_dir", type=str, default="results/figures")
     return p.parse_args()
 
@@ -325,6 +427,10 @@ if __name__ == "__main__":
         plot_alpha_ablation(args.alpha_ablation, out_dir)
     if args.mac_compare:
         plot_mac_compare(args.mac_compare, out_dir)
+    if args.lr_sweep:
+        plot_lr_sweep(args.lr_sweep, out_dir)
+    if args.mac_sweep:
+        plot_mac_sweep(args.mac_sweep, out_dir)
 
     if not any([
         args.result,
@@ -332,5 +438,8 @@ if __name__ == "__main__":
         args.ablation_clients,
         args.alpha_ablation,
         args.mac_compare,
+        args.lr_sweep,
+        args.mac_sweep,
     ]):
-        print("No input specified. Use --result, --ablation_noise, --ablation_clients, --alpha_ablation, or --mac_compare.")
+        print("No input specified. Use --result, --ablation_noise, --ablation_clients, "
+              "--alpha_ablation, --mac_compare, --lr_sweep, or --mac_sweep.")

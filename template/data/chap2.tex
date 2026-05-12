@@ -1,77 +1,127 @@
 \chapter{Background and Related Work}
 
 \section{Federated Learning}
-\ \ \ \ \, Federated learning considers the optimization of a global model over data
-distributed across multiple clients. If client $n$ contributes to local data
-$\mathcal{D}_n$, the global objective can be written as
+\ \ \ \ \, Federated learning considers the optimization of a global model
+over data distributed across multiple clients. If client $n$ contributes
+local data $\mathcal{D}_n$, the global objective is
 \begin{equation}
-    \min_w F(w) =
-    \sum_{n=1}^{N} p_n F_n(w),
+    \min_w F(w) = \sum_{n=1}^{N} p_n F_n(w),
     \quad
-    F_n(w) =
-    \frac{1}{|\mathcal{D}_n|}
-    \sum_{(x,y)\in\mathcal{D}_n}
-    \ell(w;x,y),
+    F_n(w) = \frac{1}{|\mathcal{D}_n|}
+    \sum_{(x,y)\in\mathcal{D}_n} \ell(w;x,y),
 \end{equation}
-where $p_n$ is often proportional to the local data size $|\mathcal{D}_n|$. FedAvg trains this
-objective by alternating between local client optimization and server-side
-averaging \citep{mcmahan2017communication}. The method is simple and
-communication-efficient comparing to fully synchronous distributed SGD, but
-it still requires explicit client uploads in each round.
+where $p_n$ is often proportional to the local data size
+$|\mathcal{D}_n|$. FedAvg solves this objective by alternating local
+client optimization with server-side averaging
+\cite{mcmahan2017communication}, and is communication-efficient
+compared with fully synchronous distributed SGD. Later work addresses
+client drift and data heterogeneity: FedProx adds a proximal term on
+the local objective \cite{li2020fedprox}; SCAFFOLD uses control
+variates to correct the drift \cite{karimireddy2020scaffold}; and
+Adaptive Federated Optimization shows that server-side adaptive
+methods such as FedAdaGrad and FedAdam can outperform plain FedAvg
+under the same communication budget~\cite{reddi2021adaptive}. A
+comprehensive treatment of open problems in FL is given by
+\cite{kairouz2021advances} and by
+\cite{wang2021field}.
 
 \section{Analog Over-the-Air Aggregation}
-\ \ \ \ \, OTA-FL replaces separate digital uploads with analog aggregation in the
-wireless channel. In an idealized channel, simultaneous client transmissions
-sum at the receiver, so the server directly observes an aggregate update, limiting
-the required multiple-access resource's sensitivity to
-the number of clients. However, in reality the observed aggregate is usually noisy. A simplified
-channel model is
+\ \ \ \ \, Over-the-air computation exploits the physical superposition of
+simultaneously transmitted analog signals over the wireless
+multiple-access channel, so that the receiver directly observes a
+function (here, a sum) of client inputs rather than decoding each
+transmission separately~\cite{goldenbaum2013computation,nazer2007computation}.
+Applying this idea to FL yields OTA-FL: clients transmit analog
+updates concurrently, and the server aggregates in one shared channel
+use~\cite{zhu2020broadband,amiri2020machine,yang2020federated,sery2021over,sahin2023survey}.
+A simplified channel model, without fading or power control, is
 \begin{equation}
     y^t = \sum_{n=1}^{N} \Delta_n^t + \xi^t,
 \end{equation}
-As equation $(1.2)$ shows, the server uses $\tilde{g}_t = y_t/N$ as the update direction. In the
-AWGN case where $\alpha=2$, $\xi^t \sim \mathcal{N}(0,\sigma^2 I)$. In the heavier
-channel model used by this project, $\xi^t$ follows a symmetric
-$\alpha$-stable distribution.
-
-The original adaptive OTA-FL paper includes more general channel effects,
-e.g. fading coefficients and symmetric $\alpha$-stable interference
-\citep{wang2024adaptive}. This project, however, does not implement fading or explicit
-power-control mechanisms, but the $\alpha$-stable interference
-axis. This is the key step beyond an AWGN-only simulator because
-$\alpha$-stable noise captures rare but large impulsive channel perturbations.
+and the server uses $\tilde{g}^t = y^t/N$ as the update direction. In
+the AWGN case $\xi^t \sim \mathcal{N}(0,\sigma^2 I)$. In the
+heavier-tailed setting studied in this project, $\xi^t$ follows a
+symmetric $\alpha$-stable distribution
+\cite{nikias1995alphastable,win2009mathematical}.
 
 \section{Adaptive Gradient Methods}
+\ \ \ \ \, Adaptive optimizers adapt the learning rate separately for each
+variable based on historical gradients. AdaGrad accumulates squared
+gradients and scales each coordinate's learning rate inversely to the
+square root of its accumulated magnitude~\cite{duchi2011adaptive}. Adam
+combines first-moment smoothing, second-moment exponential averaging,
+and bias correction~\cite{kingma2015adam}. Convergence of AdaGrad
+under adversarial noise was analyzed in~\cite{ward2019adagrad}, and a
+simple convergence proof of Adam under relaxed assumptions is given
+by~\cite{defossez2022adamsimple}. In centralized learning these
+mechanisms are typically motivated by sparse gradients, noisy
+mini-batches, and heterogeneous coordinate scales.
 
-\ \ \ \, Adaptive optimizers adapts the learning rate separately for each varaibles by 
-the historical gradients. Here we introduce AdaGrad and Adam.
+In OTA-FL, the same mechanisms have an additional interpretation. If
+channel noise makes the aggregate update unusually large in some
+coordinate, the second-moment state for that coordinate increases. The
+denominator of the adaptive update then becomes larger, reducing the
+effective step size. This creates an implicit feedback loop from
+observed noisy update magnitude to the server learning rate. The
+project tests whether this feedback loop is visible in training curves
+and ablation studies.
 
-AdaGrad accumulates squared gradients and scales each coordinate's
-learning rate inversely proportional to the square root of its accumulated
-magnitude \citep{duchi2011adaptive}. Adam combines first-moment smoothing,
-second-moment exponential averaging and bias correction
-\citep{kingma2015adam}. In centralized learning, these mechanisms are usually
-motivated by sparse gradients, noisy mini-batches and heterogeneous
-coordinate scales.
-
-In OTA-FL, the same mechanisms have an additional interpretation. If channel
-noise makes the aggregate update unusually large in some coordinate, the
-second-moment state for that coordinate increases. The denominator of the
-adaptive update then becomes larger, reducing the effective step size. This
-creates an implicit feedback loop from observed noisy update magnitude to
-server learning rate. The project tests whether this feedback loop is visible
-in training curves and ablation studies.
+\section{Robust Aggregation under Impulsive Noise}
+\ \ \ \ \, Heavy-tailed and Byzantine perturbations motivate a parallel line of
+work on robust aggregation. Krum selects one gradient closest to its
+neighbours in $\ell_2$ distance~\cite{blanchard2017krum}; coordinate-wise
+median and trimmed mean tolerate up to a constant fraction of
+adversarial clients~\cite{yin2018byzantine}; and robust aggregation by
+weighted geometric median gives communication-efficient Byzantine-robust
+FL~\cite{pillutla2022robust}. Classical robust statistics gives the
+older foundations: Huber-type M-estimators and the median absolute
+deviation~\cite{huber2009robust,hampel1986robustbook} are exactly the
+primitives used in Median Anchored Clipping.
 
 \section{Positioning Relative to the Reference Paper}
-\ \ \ \ \, The reference paper proposes adaptive federated learning over the air and
-studies AdaGrad-like and Adam-like server updates with theoretical analysis
-under $\alpha$-stable interference \citep{wang2024adaptive}. It evaluates
-multiple image, character classification tasks and includes studies over
-tail index, client count and data heterogeneity.
+\ \ \ \ \, The reference paper proposes adaptive federated learning over the
+air and studies AdaGrad-like and Adam-like server updates with
+theoretical analysis under $\alpha$-stable
+interference~\cite{wang2024adaptive}. It evaluates multiple image and
+character classification tasks and includes studies over tail index,
+client count, and data heterogeneity. The present project uses that
+paper as the conceptual source but narrows the deliverable. The
+implemented framework supports the core OTA-FL training loop, the
+Chambers--Mallows--Stuck $\alpha$-stable
+sampler~\cite{chambers1976method}, MAC robust pre-processing, and
+four adaptive server optimizers. The main evidence is the
+$\alpha$-stable tail-index ablation, with AWGN reported as the
+$\alpha=2$ endpoint rather than the whole scope. The explicit
+scope difference is summarized in Table~\ref{tab:scope-diff}.
 
-The present project uses that paper as the conceptual source but narrows the
-deliverable. The implemented framework supports the core OTA-FL training loop,
-$\alpha$-stable noise based on the Chambers-Mallows-Stuck method
-\citep{chambers1976method}, MAC robust pre-processing and adaptive server
-optimizers. The main evidence is the alpha tail-index ablation, with AWGN
-reported as the $\alpha=2$ endpoint rather than the whole scope.
+\begin{table}[!htbp]
+    \centering
+    \caption{Scope difference between this project and the reference paper
+    \cite{wang2024adaptive}.}
+    \label{tab:scope-diff}
+    \begin{tabular}{p{0.26\textwidth}|p{0.32\textwidth}|p{0.32\textwidth}}
+        \hline
+        Aspect & Reference paper & This project \\
+        \hline
+        Channel model & $\alpha$-stable $+$ Rayleigh fading
+        $h_{n,t}$ $+$ power control & Symmetric $\alpha$-stable only,
+        no fading, no power control \\
+        Tail index coupling & Channel $\alpha$ and optimizer
+        denominator $\alpha$ are independent & Channel $\alpha$ and
+        denominator $\alpha$ are shared \\
+        Datasets & CIFAR-10, CIFAR-100, FEMNIST and more &
+        MNIST, CIFAR-10 \\
+        Convergence analysis & Full non-convex proof under
+        $\alpha$-stable noise & One-dimensional toy intuition
+        \\
+        Empirical scale & Per-method learning-rate tuning across many
+        seeds and configurations & Three seeds, fixed server
+        learning rate per experiment \\
+        Hardware validation & SDR testbed claimed in the paper &
+        Pure software simulator \\
+        Primary output & Algorithmic contribution and convergence
+        theorems & Reproducible simulator and empirical robustness
+        evidence \\
+        \hline
+    \end{tabular}
+\end{table}

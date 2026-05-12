@@ -306,6 +306,101 @@ paper_update() {
     --out_dir "$GENERATED_TEX_DIR"
 }
 
+mechanism() {
+  # Run a short heavy-tail trace with --save_diagnostics so the mechanism
+  # plot can show v_t, ‖ḡ_t‖, and the effective server step contracting on
+  # impulsive rounds. Defaults to a single seed and alpha=1.3 to keep this
+  # cheap; override MECH_ROUNDS / MECH_SEEDS / MECH_ALPHAS to broaden it.
+  local mech_alphas="${MECH_ALPHAS:-1.3}"
+  local mech_seeds="${MECH_SEEDS:-42}"
+  local mech_rounds="${MECH_ROUNDS:-50}"
+  run_cmd uv run -m src.experiments.heavy_tail --study alpha \
+    --dataset "$DATASET" \
+    --model "$MODEL" \
+    --rounds "$mech_rounds" \
+    --num_clients "$NUM_CLIENTS" \
+    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
+    --batch_size "$COMPARE_BATCH_SIZE" \
+    --server_lr "$SERVER_LR" \
+    --local_lr "$LOCAL_LR" \
+    --momentum "$MOMENTUM" \
+    --beta2 "$BETA2" \
+    --noise_scale "$NOISE_SCALE" \
+    --alphas "$mech_alphas" \
+    --seeds "$mech_seeds" \
+    --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
+    --dir_conc "$DIR_CONC" \
+    --save_diagnostics \
+    --out_dir "$HEAVYTAIL_DIR/mechanism" \
+    "${ACCELERATOR_FLAGS[@]}"
+
+  # Mechanism plots are one per alpha key inside the JSON.
+  local mech_json="$HEAVYTAIL_DIR/mechanism/alpha_ablation_${DATASET}_${MODEL}.json"
+  IFS=',' read -r -a mech_alpha_arr <<< "$mech_alphas"
+  for alpha_value in "${mech_alpha_arr[@]}"; do
+    run_cmd uv run -m src.experiments.plot_mechanism \
+      --diagnostics "$mech_json" \
+      --alpha "$alpha_value" \
+      --out_dir "$FIGURE_DIR"
+  done
+}
+
+lr_sweep() {
+  local lr_alphas="${LR_SWEEP_ALPHA:-1.3}"
+  local lr_values="${LR_SWEEP_LRS:-1e-3,3e-3,1e-2,3e-2,1e-1}"
+  run_cmd uv run -m src.experiments.lr_sweep \
+    --dataset "$DATASET" \
+    --model "$MODEL" \
+    --rounds "$ABLATION_ROUNDS" \
+    --num_clients "$NUM_CLIENTS" \
+    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
+    --batch_size "$COMPARE_BATCH_SIZE" \
+    --server_lrs "$lr_values" \
+    --local_lr "$LOCAL_LR" \
+    --momentum "$MOMENTUM" \
+    --beta2 "$BETA2" \
+    --noise_scale "$NOISE_SCALE" \
+    --mac_alpha "$lr_alphas" \
+    --seeds "$SEEDS" \
+    --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
+    --dir_conc "$DIR_CONC" \
+    --out_dir "$HEAVYTAIL_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
+
+  run_cmd uv run -m src.experiments.plot \
+    --lr_sweep "$HEAVYTAIL_DIR/lr_sweep_${DATASET}_${MODEL}_alpha${lr_alphas}.json" \
+    --out_dir "$FIGURE_DIR"
+}
+
+mac_sweep() {
+  local mac_ks="${MAC_K_SWEEP:-0,1,2,3,5}"
+  local mac_gammas="${MAC_GAMMA_SWEEP:-0.05,0.1,0.2}"
+  run_cmd uv run -m src.experiments.heavy_tail --study mac_sweep \
+    --dataset "$DATASET" \
+    --model "$MODEL" \
+    --rounds "$ABLATION_ROUNDS" \
+    --num_clients "$NUM_CLIENTS" \
+    --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
+    --batch_size "$COMPARE_BATCH_SIZE" \
+    --server_lr "$SERVER_LR" \
+    --local_lr "$LOCAL_LR" \
+    --momentum "$MOMENTUM" \
+    --beta2 "$BETA2" \
+    --noise_scale "$NOISE_SCALE" \
+    --mac_alpha "$MAC_ALPHA" \
+    --mac_clips "$mac_ks" \
+    --mac_noise_scales "$mac_gammas" \
+    --seeds "$SEEDS" \
+    --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
+    --dir_conc "$DIR_CONC" \
+    --out_dir "$HEAVYTAIL_DIR" \
+    "${ACCELERATOR_FLAGS[@]}"
+
+  run_cmd uv run -m src.experiments.plot \
+    --mac_sweep "$HEAVYTAIL_DIR/mac_sweep_${DATASET}_${MODEL}_alpha${MAC_ALPHA}.json" \
+    --out_dir "$FIGURE_DIR"
+}
+
 core_heavytail() {
   alpha_sanity
   alpha_ablation
@@ -379,6 +474,10 @@ Core project modules:
   mac_compare         Run MAC vs no-MAC under alpha-stable interference.
   core_heavytail      Run alpha_sanity, alpha_ablation, mac_compare, paper_update.
   paper_update        Generate alpha/MAC figures and LaTeX tables from JSON.
+  mechanism           Run a single-seed heavy-tail trace with diagnostics on
+                      and plot v_t, ‖ḡ_t‖, effective step contraction.
+  lr_sweep            Sweep server learning rate per method at fixed (α, γ).
+  mac_sweep           Sweep MAC clip factor k and noise scale γ at fixed α.
 
 Optional extension modules:
   heavy_tail_compare  Legacy one-off alpha-stable comparison.
@@ -397,7 +496,7 @@ EOF
 main() {
   local module="${1:-help}"
   case "$module" in
-    runall|workflow|quickcheck|setup|data|train|train_mnist|train_cifar|compare|compare_mnist|compare_cifar|ablation|ablation_noise|ablation_clients|plot|alpha_sanity|alpha_ablation|mac_compare|core_heavytail|paper_update|heavy_tail_compare|paper_like_compare|help)
+    runall|workflow|quickcheck|setup|data|train|train_mnist|train_cifar|compare|compare_mnist|compare_cifar|ablation|ablation_noise|ablation_clients|plot|alpha_sanity|alpha_ablation|mac_compare|core_heavytail|paper_update|mechanism|lr_sweep|mac_sweep|heavy_tail_compare|paper_like_compare|help)
       "$module"
       ;;
     *)

@@ -1,60 +1,65 @@
 \chapter{Conclusion and Future Work}
 
 \section{Conclusion}
-This thesis presents an empirical framework for adaptive federated learning
-over the air under alpha-stable channel interference. The project is
-motivated by the tension between OTA-FL's communication scalability and its
-noisy aggregation channel. The implemented system tests whether server-side
-adaptive optimization can act as an implicit, CSI-free noise-mitigation
-mechanism through its fractional second-moment accumulator.
+\ \ \ \ \, This thesis asks whether server-side adaptive optimization can act
+as an implicit, CSI-free filter for an $\alpha$-stable OTA-FL channel.
+The main supported claim is empirical: under the three-seed CIFAR-10
+tail-index ablation with $\gamma=0.05$ and $\alpha\in\{1.1,1.3,1.5,
+1.7,1.9\}$, AdaGrad-OTA (49.52--51.75\%) and Adam-OTA (42.88--44.82\%)
+outperform FedAvg-OTA (~11.9\%) and FedAvgM-OTA (20.5--20.7\%) by a
+large margin, which supports the hypothesis that a fractional
+second-moment accumulator contracts the effective server learning rate
+precisely on impulsive rounds.
 
-The completed AWGN endpoint experiments show that this mechanism is useful
-but not universally dominant. On MNIST, AdaGrad-OTA and Adam-OTA achieve the
-best controlled-comparison accuracies, reaching 93.05\% and 93.46\%
-respectively. On CIFAR-10, FedAvgM-OTA is the strongest method in the
-200-round AWGN comparison, with 64.42\% final accuracy, while AdaGrad-OTA and
-Adam-OTA still improve over plain FedAvg-OTA. This motivates the revised
-heavy-tail experiments: the core claim should be evaluated under
-alpha-stable impulsive interference, not only under the Gaussian endpoint.
-
-The new three-seed CIFAR-10 tail-index ablation gives the main positive
-evidence for the project. FedAvg-OTA remains around 11.9\% final accuracy and
-FedAvgM-OTA remains around 20.5--20.7\% across the tested $\alpha$ values.
-AdaGrad-OTA reaches 49.52--51.75\% for $\alpha<2$, and Adam-OTA reaches
-42.88--44.82\% for $\alpha<2$. These results support the claim that
-fractional adaptive server normalization can be substantially more stable
-than direct or momentum-based OTA aggregation in the implemented heavy-tail
-simulation. At the same time, the alpha trend is not monotonic, and the MAC
-comparison at $\alpha=1.3$ is neutral. Therefore, the final claim must remain
-empirical and scoped: the implementation demonstrates useful adaptive
-behavior, but it does not fully reproduce every trend or mechanism claimed by
-the reference paper.
-
-The main output is therefore not a complete theoretical proof or a full
-reproduction of all experiments in the reference paper. Instead, the output
-is a working PyTorch simulator, alpha-stable tail-index experiments, MAC
-robustness comparisons, and a set of figures and JSON logs that support a
-carefully scoped adaptive OTA-FL robustness claim.
+The claim is scoped rather than absolute. The observed $\alpha$-trend
+is non-monotonic at a fixed server learning rate; MAC at the default
+$\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point is empirically
+neutral; and in the $\alpha=2$ CIFAR-10 comparison FedAvgM-OTA
+remains the strongest method (64.42\%), which shows that fractional
+second-moment normalization is not costless in the Gaussian regime.
+The main output is therefore a reproducible PyTorch simulator with
+$\alpha$-stable tail-index experiments, MAC robustness comparisons,
+and a one-dimensional intuition for the shrinkage mechanism, rather
+than a complete theoretical proof or line-by-line reproduction of the
+reference paper.
 
 \section{Limitations}
-The project remains narrower than the full reference paper in three main
-ways. First, it provides only a toy theoretical explanation and points to the
-reference paper for the complete non-convex convergence proof. Second, the
-wireless channel is still a simulation oracle and does not model mobility,
-multi-cell interference, synchronization, CSI acquisition, or power control.
-Third, the project does not include a software-defined-radio or real wireless
-testbed validation. In addition, the current empirical evidence is still
-limited by a small number of seeds, no per-method learning-rate sweep, and no
-direct mechanism plot of $v_t$ or the effective server step size.
+\ \ \ \ \, The project remains narrower than the full reference paper in four
+ways. First, it provides a one-dimensional closed-form intuition
+rather than a full non-convex convergence proof. Second, the wireless
+channel is a simulation oracle and does not model mobility, multi-cell
+interference, synchronization errors, CSI acquisition, or power
+control. Third, the project does not include a software-defined-radio
+or real wireless testbed validation. Fourth, the empirical evidence is
+bounded by three seeds and a single global server learning rate per
+experiment, so the non-monotonic $\alpha$-trend cannot yet be
+disentangled from lr-mismatch (see~\S4.5 and~\S4.8.3).
 
 \section{Future Work}
-Future extensions can make the project closer to a full wireless learning
-system by adding richer channel dynamics, studying mobility and power-control
-effects, and evaluating the method on a real software-defined-radio testbed.
-A theoretical extension could replace the toy analysis with a complete
-project-specific proof for the implemented optimizer variants. On the
-experimental side, the most important next steps are to validate the
-alpha-stable sampler against known distributional diagnostics, tune learning
-rates separately for each method and $\alpha$, sweep the MAC clipping factor,
-and log mechanism-level quantities such as $v_t$, update norms, noise norms,
-and effective learning rates.
+\label{sec:future-work}
+\ \ \ \ \, The following extensions are ordered by estimated effort.
+
+\noindent\textbf{Short-term (within one week).}
+(a) Per-$(\text{method},\alpha)$ server-learning-rate sweep at
+$\alpha\in\{1.3,1.7\}$ using \path{src/experiments/lr_sweep.py} to
+test whether the non-monotonic trend is robust to lr-tuning;
+(b) extend the seed count from 3 to 5 for the main $\alpha$ ablation
+so that $\pm$ standard deviations tighten below the method-to-method
+gap; (c) run the MAC $(k,\gamma)$ sweep at $\alpha\in\{1.1,1.3\}$
+to identify an operating region where MAC produces a measurable gain.
+
+\noindent\textbf{Medium-term (within one month).}
+Add Rayleigh fading coefficients $h_{n,t}\sim\mathcal{CN}(0,1)$ with
+per-client power control $\mathbb{E}|h_{n,t}\Delta_n^t|^2\le\bar P$,
+decouple the channel tail index from the optimizer denominator
+$\alpha$ so that the two degrees of freedom can be studied
+independently, and log per-round mechanism diagnostics
+($\|v_t\|$, $\|\tilde g_t\|$, effective step ratio) to produce the
+mechanism plot that the current results do not yet include.
+
+\noindent\textbf{Long-term (three to six months).}
+Validate the simulator on a software-defined-radio testbed
+(USRP X310 and GNU Radio) with multiple transmit clients and a single
+server receiver, and replace the one-dimensional closed-form with a
+multi-dimensional convergence proof specific to the implemented
+fractional-moment update.

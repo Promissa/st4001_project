@@ -7,7 +7,11 @@
       "Bash(tensorboard *)",
       "Bash(uv pip *)",
       "Bash(uv tool *)",
-      "Bash(/home/pr/.local/share/uv/tools/tensorboard/bin/python *)"
+      "Bash(/home/pr/.local/share/uv/tools/tensorboard/bin/python *)",
+      "Bash(grep -n \"h_{n,t}\\\\|h_\\\\{n,t\\\\}\" /home/pr/Documents/codes/st4001_project/src/experiments/federated.py)",
+      "Bash(git -C /home/pr/Documents/codes/st4001_project diff --stat template/data/ template/ref.bib)",
+      "Bash(kpsewhich texgyretermes-regular.otf)",
+      "Bash(tlmgr info *)"
     ]
   }
 }

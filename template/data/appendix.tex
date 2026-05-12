@@ -2,10 +2,92 @@
 \addcontentsline{toc}{chapter}{Appendix}
 \centerline{\fontsize{11pt}{13.2pt}\selectfont(Supplementary Materials)}
 
-The supplementary materials for this thesis are maintained in the project
-repository. The main experiment commands are collected in \path{run_all.sh}
-and \path{RUN.md}. The revised heavy-tail runs are stored under
-\path{results/heavytail/}. Generated figures are stored under
-\path{results/figures/}, and generated LaTeX tables are stored under
-\path{template/data/generated/}. These files provide the direct record of the
-runs reported in the experimental section.
+\section*{A. Repository Layout and Reproduction Commands}
+The main experiment commands are collected in \path{run_all.sh} and
+\path{RUN.md}. The revised heavy-tail runs are stored under
+\path{results/heavytail/}; generated figures are under
+\path{results/figures/}; generated LaTeX tables are under
+\path{template/data/generated/}. The core module layout is
+
+\begin{center}
+\begin{tabular}{l|l}
+\hline
+Module & Purpose \\
+\hline
+\path{src/channel/noise.py}     & Chambers--Mallows--Stuck $S\alpha S$ sampler \\
+\path{src/channel/ota.py}       & \texttt{NoisyOracle} for $\tilde g^t=(\sum_n \Delta_n^t+\xi^t)/N$ \\
+\path{src/channel/mac.py}       & Median Anchored Clipping pre-processing \\
+\path{src/data/datasets.py}     & MNIST/CIFAR-10 loading and Dirichlet partition \\
+\path{src/optimizers/baselines.py}   & FedAvg-OTA, FedAvgM-OTA \\
+\path{src/optimizers/adagrad_ota.py} & AdaGrad-OTA with fractional $v_t^{1/\alpha}$ \\
+\path{src/optimizers/adam_ota.py}    & Adam-OTA with fractional $\hat v_t^{1/\alpha}$ \\
+\path{src/experiments/federated.py}  & Training loop \\
+\path{src/experiments/heavy_tail.py} & $\alpha$ ablation, MAC compare, MAC sweep \\
+\path{src/experiments/lr_sweep.py}   & Per-method server learning-rate sweep \\
+\path{src/experiments/ablation.py}   & Noise-scale and client-count ablations \\
+\path{src/experiments/plot.py}       & All experiment plots \\
+\path{src/experiments/plot_mechanism.py} & Mechanism-diagnostic plots \\
+\path{src/experiments/report.py}     & LaTeX table generation \\
+\hline
+\end{tabular}
+\end{center}
+
+\section*{B. Consolidated Hyperparameter Table}
+Every experiment in the thesis uses the values below, with per-table
+overrides stated explicitly in Chapter~4.
+
+\begin{center}
+\begin{tabular}{l|l|l}
+\hline
+Parameter & Default & Where it is overridden \\
+\hline
+Dataset / model        & CIFAR-10 / ResNet-18 & MNIST sanity uses MLP \\
+Clients $N$            & 100        & Client-count ablation (5/10/20/50) \\
+Communication rounds   & 100        & Main comparison uses 200 \\
+Local epochs $E$       & 1          & Main comparison uses 5 \\
+Batch size             & 64         & --- \\
+Local learning rate    & 0.01       & --- \\
+Server learning rate $\eta$ & 0.01  & Main comparison uses 0.1; client-count ablation uses $10^{-4}$ \\
+Momentum / $\beta_1$   & 0.9        & --- \\
+Adam $\beta_2$         & 0.999      & --- \\
+Adam-OTA $\varepsilon$ & $10^{-8}$  & --- \\
+AdaGrad-OTA $\varepsilon$ & $10^{-4}$ & --- \\
+Noise tail index $\alpha$ & 2.0     & $\alpha$ ablation $\in\{1.1,\dots,1.9\}$; MAC compare 1.3 \\
+Noise scale $\gamma$   & 0.05       & MAC sweep $\in\{0.05,0.1,0.2\}$ \\
+Partition              & non-IID Dirichlet 0.1 & MNIST sanity uses IID \\
+Seeds                  & 42/43/44   & Main comparison and client-count ablation use seed 42 only \\
+\hline
+\end{tabular}
+\end{center}
+
+\section*{C. Server-Optimizer Pseudocode}
+All four server methods share the per-round inputs ($\tilde g^t$,
+server learning rate $\eta$) and share the in-place update
+$w_{t+1}\leftarrow w_t - \Delta w$. They differ only in how $\Delta w$
+is computed from $\tilde g^t$.
+
+\begin{center}
+\begin{tabular}{l|l}
+\hline
+Optimizer & Update rule \\
+\hline
+FedAvg-OTA     & $\Delta w = \eta\,\tilde g^t$ \\
+FedAvgM-OTA    & $m_t=\rho m_{t-1}+\tilde g^t;\ \Delta w=\eta\, m_t$ \\
+AdaGrad-OTA    & $s_t=\beta_1 s_{t-1}+(1-\beta_1)\tilde g^t;\ v_t=v_{t-1}+|s_t|^\alpha;$
+                $\Delta w = \eta\, s_t/(v_t^{1/\alpha}+\varepsilon)$ \\
+Adam-OTA       & $m_t=\beta_1 m_{t-1}+(1-\beta_1)\tilde g^t;$
+                $v_t=\beta_2 v_{t-1}+(1-\beta_2)|\tilde g^t|^\alpha;$
+                $\hat m_t=m_t/(1-\beta_1^t);\ \hat v_t=v_t/(1-\beta_2^t);$
+                $\Delta w = \eta\, \hat m_t/(\hat v_t^{1/\alpha}+\varepsilon)$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\section*{D. Hardware}
+All reported experiments are run on a single NVIDIA GPU with
+PyTorch's default CUDA backend; wall-clock time for the full
+$\alpha$ ablation ($4$ methods $\times$ $6$ $\alpha$ values $\times$
+$3$ seeds $\times$ $100$ rounds) is approximately 3 hours. The full
+MAC $(k,\gamma)$ sweep uses an additional 1.5 hours. Exact device
+information is embedded in each JSON payload under the
+\texttt{args} field.

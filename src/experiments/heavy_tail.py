@@ -398,6 +398,67 @@ def run_alpha_ablation(args, device: torch.device) -> dict:
     return results
 
 
+def run_mac_sweep(args, device: torch.device) -> dict:
+    """
+    Sweep MAC clipping factor k and noise scale γ at a fixed heavy-tailed alpha.
+
+    Each (k, γ) cell runs every method across the configured seeds, with MAC
+    enabled. The k=0 cell is special-cased to "no MAC" so the table can show
+    the baseline alongside the clipped variants.
+
+    Output JSON shape:
+      results = {
+          "<gamma>": {
+              "<k>": { method: {"runs": [...], "summary": {...}} },
+              ...
+          },
+          ...
+      }
+    """
+    print(f"\n=== MAC sweep: k × γ at α={args.mac_alpha} ===")
+    base_clip = args.mac_clip
+    base_noise = args.noise_scale
+    base_use_mac = args.use_mac
+
+    results: dict[str, dict[str, dict]] = {}
+    try:
+        for gamma in args.mac_noise_scales:
+            gamma_key = f"{gamma:g}"
+            results[gamma_key] = {}
+            for k in args.mac_clips:
+                k_key = f"{k:g}"
+                use_mac = k > 0
+                args.mac_clip = k if use_mac else base_clip
+                args.noise_scale = gamma
+                args.use_mac = use_mac
+                results[gamma_key][k_key] = {}
+                for method in args.methods:
+                    print(f"  γ={gamma_key:<5} k={k_key:<4} method={method}", flush=True)
+                    seeds = args.seeds
+                    if len(seeds) > 1:
+                        with ThreadPoolExecutor(max_workers=len(seeds)) as executor:
+                            futures = [
+                                executor.submit(
+                                    run_trial, method, args.mac_alpha, seed,
+                                    use_mac, args, device,
+                                )
+                                for seed in seeds
+                            ]
+                            runs = [f.result() for f in futures]
+                    else:
+                        runs = [run_trial(method, args.mac_alpha, seeds[0],
+                                          use_mac, args, device)]
+                    results[gamma_key][k_key][method] = {
+                        "runs": runs,
+                        "summary": _summary(runs),
+                    }
+    finally:
+        args.mac_clip = base_clip
+        args.noise_scale = base_noise
+        args.use_mac = base_use_mac
+    return results
+
+
 def run_mac_compare(args, device: torch.device) -> dict:
     print("\n=== Robust pre-processing: MAC vs no-MAC ===")
     cached_no_mac, sources = _find_no_mac_ablation_runs(args)
@@ -457,7 +518,8 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def parse_args():
     p = argparse.ArgumentParser(description="Heavy-tail alpha-stable ADOTA-FL experiments")
-    p.add_argument("--study", default="both", choices=["alpha", "mac", "both"])
+    p.add_argument("--study", default="both",
+                   choices=["alpha", "mac", "mac_sweep", "both"])
     p.add_argument("--dataset", default="cifar10", choices=["mnist", "cifar10"])
     p.add_argument("--model", default="resnet18",
                    choices=["mlp", "convnet", "resnet18", "resnet34"])
@@ -475,6 +537,14 @@ def parse_args():
                    help="Comma-separated alpha values, e.g. 1.1,1.3,1.5,1.7,1.9,2.0")
     p.add_argument("--mac_alpha", type=float, default=1.3)
     p.add_argument("--mac_clip", type=float, default=3.0)
+    p.add_argument("--mac_clips", type=_parse_float_list,
+                   default=[0.0, 1.0, 2.0, 3.0, 5.0],
+                   help="Clip factors for the mac_sweep study. 0 means 'no MAC'.")
+    p.add_argument("--mac_noise_scales", type=_parse_float_list,
+                   default=[0.05, 0.1, 0.2],
+                   help="Noise scales γ for the mac_sweep study.")
+    p.add_argument("--use_mac", action="store_true", default=False,
+                   help="Reserved; only used internally when sweeping over k.")
     p.add_argument("--methods", type=_parse_str_list,
                    default=DEFAULT_METHODS,
                    help="Comma-separated methods")
@@ -517,3 +587,8 @@ if __name__ == "__main__":
         results = run_mac_compare(args, device)
         path = out_dir / f"mac_compare_{args.dataset}_{args.model}_alpha{args.mac_alpha:g}.json"
         _write_json(path, {**common, "study": "mac", "results": results})
+
+    if args.study == "mac_sweep":
+        results = run_mac_sweep(args, device)
+        path = out_dir / f"mac_sweep_{args.dataset}_{args.model}_alpha{args.mac_alpha:g}.json"
+        _write_json(path, {**common, "study": "mac_sweep", "results": results})

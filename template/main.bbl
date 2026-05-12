@@ -1,4 +1,4 @@
-\begin{thebibliography}{5}
+\begin{thebibliography}{26}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{#1}
 \expandafter\ifx\csname urlstyle\endcsname\relax\else
@@ -26,6 +26,99 @@ Wang C, Chen Z, Pappas N, et~al.
 \newblock Adaptive federated learning over the air\allowbreak[A].
 \newblock 2024.
 
+\bibitem[Li et~al.(2020)Li, Sahu, Zaheer, Sanjabi, Talwalkar, and
+  Smith]{li2020fedprox}
+Li T, Sahu A~K, Zaheer M, et~al.
+\newblock Federated optimization in heterogeneous
+  networks\allowbreak[C]//\allowbreak
+Proceedings of Machine Learning and Systems (MLSys).
+\newblock 2020.
+
+\bibitem[Karimireddy et~al.(2020)Karimireddy, Kale, Mohri, Reddi, Stich, and
+  Suresh]{karimireddy2020scaffold}
+Karimireddy S~P, Kale S, Mohri M, et~al.
+\newblock {SCAFFOLD}: Stochastic controlled averaging for federated
+  learning\allowbreak[C]//\allowbreak
+International Conference on Machine Learning (ICML).
+\newblock 2020.
+
+\bibitem[Reddi et~al.(2021)Reddi, Charles, Zaheer, Garrett, Rush,
+  Kone{\v{c}}n{\'y}, Kumar, and McMahan]{reddi2021adaptive}
+Reddi S~J, Charles Z, Zaheer M, et~al.
+\newblock Adaptive federated optimization\allowbreak[C]//\allowbreak
+International Conference on Learning Representations (ICLR).
+\newblock 2021.
+
+\bibitem[Kairouz et~al.(2021)Kairouz, McMahan, Avent, Bellet, Bennis, Bhagoji,
+  Bonawitz, Charles, Cormode, Cummings, et~al.]{kairouz2021advances}
+Kairouz P, McMahan H~B, Avent B, et~al.
+\newblock Advances and open problems in federated learning\allowbreak[J].
+\newblock Foundations and Trends in Machine Learning, 2021, 14\allowbreak
+  (1--2): 1-210.
+
+\bibitem[Wang et~al.(2021)Wang, Charles, Xu, Joshi, McMahan,
+  et~al.]{wang2021field}
+Wang J, Charles Z, Xu Z, et~al.
+\newblock A field guide to federated optimization\allowbreak[A].
+\newblock 2021.
+
+\bibitem[Goldenbaum et~al.(2013)Goldenbaum, Boche, and
+  Stanczak]{goldenbaum2013computation}
+Goldenbaum M, Boche H, Stanczak S.
+\newblock Robust analog function computation via wireless multiple-access
+  channels\allowbreak[J].
+\newblock IEEE Transactions on Communications, 2013, 61\allowbreak (9):
+  3863-3877.
+
+\bibitem[Nazer et~al.(2007)Nazer and Gastpar]{nazer2007computation}
+Nazer B, Gastpar M.
+\newblock Computation over multiple-access channels\allowbreak[J].
+\newblock IEEE Transactions on Information Theory, 2007, 53\allowbreak (10):
+  3498-3516.
+
+\bibitem[Zhu et~al.(2020)Zhu, Wang, and Huang]{zhu2020broadband}
+Zhu G, Wang Y, Huang K.
+\newblock Broadband analog aggregation for low-latency federated edge
+  learning\allowbreak[J].
+\newblock IEEE Transactions on Wireless Communications, 2020, 19\allowbreak
+  (1): 491-506.
+
+\bibitem[Amiri et~al.(2020)Amiri and G{\"u}nd{\"u}z]{amiri2020machine}
+Amiri M~M, G{\"u}nd{\"u}z D.
+\newblock Machine learning at the wireless edge: Distributed stochastic
+  gradient descent over-the-air\allowbreak[J].
+\newblock IEEE Transactions on Signal Processing, 2020, 68: 2155-2169.
+
+\bibitem[Yang et~al.(2020)Yang, Jiang, Shi, and Ding]{yang2020federated}
+Yang K, Jiang T, Shi Y, et~al.
+\newblock Federated learning via over-the-air computation\allowbreak[J].
+\newblock IEEE Transactions on Wireless Communications, 2020, 19\allowbreak
+  (3): 2022-2035.
+
+\bibitem[Sery et~al.(2021)Sery, Shlezinger, Cohen, and Eldar]{sery2021over}
+Sery T, Shlezinger N, Cohen K, et~al.
+\newblock Over-the-air federated learning from heterogeneous
+  data\allowbreak[J].
+\newblock IEEE Transactions on Signal Processing, 2021, 69: 3796-3811.
+
+\bibitem[{\c{S}}ahin et~al.(2023){\c{S}}ahin and Yang]{sahin2023survey}
+{\c{S}}ahin A, Yang R.
+\newblock A survey on over-the-air computation\allowbreak[J].
+\newblock IEEE Communications Surveys \& Tutorials, 2023, 25\allowbreak (3):
+  1877-1908.
+
+\bibitem[Nikias et~al.(1995)Nikias and Shao]{nikias1995alphastable}
+Nikias C~L, Shao M.
+\newblock Signal processing with alpha-stable distributions and
+  applications\allowbreak[M].
+\newblock Wiley-Interscience, 1995.
+
+\bibitem[Win et~al.(2009)Win, Pinto, and Shepp]{win2009mathematical}
+Win M~Z, Pinto P~C, Shepp L~A.
+\newblock A mathematical theory of network interference and its
+  applications\allowbreak[J].
+\newblock Proceedings of the IEEE, 2009, 97\allowbreak (2): 205-230.
+
 \bibitem[Duchi et~al.(2011)Duchi, Hazan, and Singer]{duchi2011adaptive}
 Duchi J, Hazan E, Singer Y.
 \newblock Adaptive subgradient methods for online learning and stochastic
@@ -38,6 +131,53 @@ Kingma D~P, Ba J.
 \newblock Adam: A method for stochastic optimization\allowbreak[C]//\allowbreak
 International Conference on Learning Representations.
 \newblock 2015.
+
+\bibitem[Ward et~al.(2019)Ward, Wu, and Bottou]{ward2019adagrad}
+Ward R, Wu X, Bottou L.
+\newblock {AdaGrad} stepsizes: Sharp convergence over nonconvex
+  landscapes\allowbreak[C]//\allowbreak
+International Conference on Machine Learning (ICML).
+\newblock 2019.
+
+\bibitem[D{\'e}fossez et~al.(2022)D{\'e}fossez, Bottou, Bach, and
+  Usunier]{defossez2022adamsimple}
+D{\'e}fossez A, Bottou L, Bach F, et~al.
+\newblock A simple convergence proof of adam and {AdaGrad}\allowbreak[J].
+\newblock Transactions on Machine Learning Research (TMLR), 2022.
+
+\bibitem[Blanchard et~al.(2017)Blanchard, El~Mhamdi, Guerraoui, and
+  Stainer]{blanchard2017krum}
+Blanchard P, El~Mhamdi E~M, Guerraoui R, et~al.
+\newblock Machine learning with adversaries: {B}yzantine tolerant gradient
+  descent\allowbreak[C]//\allowbreak
+Advances in Neural Information Processing Systems (NeurIPS).
+\newblock 2017.
+
+\bibitem[Yin et~al.(2018)Yin, Chen, Kannan, and Bartlett]{yin2018byzantine}
+Yin D, Chen Y, Kannan R, et~al.
+\newblock {B}yzantine-robust distributed learning: Towards optimal statistical
+  rates\allowbreak[C]//\allowbreak
+International Conference on Machine Learning (ICML).
+\newblock 2018.
+
+\bibitem[Pillutla et~al.(2022)Pillutla, Kakade, and
+  Harchaoui]{pillutla2022robust}
+Pillutla K, Kakade S~M, Harchaoui Z.
+\newblock Robust aggregation for federated learning\allowbreak[J].
+\newblock IEEE Transactions on Signal Processing, 2022, 70: 1142-1154.
+
+\bibitem[Huber et~al.(2009)Huber and Ronchetti]{huber2009robust}
+Huber P~J, Ronchetti E~M.
+\newblock Robust statistics\allowbreak[M].
+\newblock 2nd ed.
+\newblock Wiley, 2009.
+
+\bibitem[Hampel et~al.(1986)Hampel, Ronchetti, Rousseeuw, and
+  Stahel]{hampel1986robustbook}
+Hampel F~R, Ronchetti E~M, Rousseeuw P~J, et~al.
+\newblock Robust statistics: The approach based on influence
+  functions\allowbreak[M].
+\newblock Wiley, 1986.
 
 \bibitem[Chambers et~al.(1976)Chambers, Mallows, and Stuck]{chambers1976method}
 Chambers J~M, Mallows C~L, Stuck B~W.

@@ -3,9 +3,13 @@ Core ADOTA-FL training loop.
 
 Round structure (one communication round t):
   1. Server broadcasts w_t to all N clients.
-  2. Each client n computes local gradient ∇f_n(w_t) via local SGD.
-  3. All clients transmit simultaneously; server receives OTA aggregate
-     g_t = (1/N) * [Σ_n h_{n,t} * ∇f_n(w_t)] + ξ_t  via NoisyOracle.
+  2. Each client n runs E local SGD epochs and reports the pseudo-gradient
+     Δ_n^t = w_t − [w_n^t]^(E)  ≈  +η_local · Σ ∇f_n(w_t).
+  3. All clients transmit simultaneously; the server receives the OTA aggregate
+     g_t = (1/N) * (Σ_n Δ_n^t + ξ_t)  via NoisyOracle.
+     This project does not model fading or power control, so there is no
+     per-client channel coefficient — the only channel effect is the additive
+     symmetric α-stable interference ξ_t.
   4. (Optional) MAC clips g_t to remove impulsive outliers.
   5. Server-side optimizer (AdaGrad-OTA / Adam-OTA / FedAvgM / FedAvg)
      updates w_{t+1} using g_t.

@@ -1,80 +1,100 @@
 \chapter{Introduction}
 
 \section{Motivation}
-\ \ \ \ \, Federated learning (FL) trains a shared model across distributed clients
-without requiring the clients to upload their raw data. This design is
-attractive for edge intelligence because it reduces privacy exposure and
-keeps data near its source device. A standard FL round includes broadcasting current global model, 
-letting clients run local optimization and aggregates
-their updates on a central server. The FedAvg algorithm is the classic
-example of this workflow and remains the baseline for many FL systems
-\citep{mcmahan2017communication}.
+\ \ \ \ \, Federated learning (FL) trains a shared model across distributed
+clients without requiring those clients to upload raw data, which is
+attractive for edge intelligence because it reduces privacy exposure
+and keeps data near its source device~\cite{mcmahan2017communication}.
+The communication cost of conventional digital FL grows with the number
+of participating clients, because every client must send an update in a
+separate resource block. Analog over-the-air aggregation (OTA-FL) changes
+this by letting clients transmit updates as analog waveforms at the
+same time, so that the wireless multiple-access channel physically
+superposes the signals and the server observes a single aggregate in
+one shared channel use.
 
-The communication cost of conventional digital FL grows with the number of
-clients because each client must send an update to the server separately.
-Analog over-the-air aggregation changes the communication model. If clients
-transmit the updates in analog waveforms at the same time, the wireless
-multiple-access channel physically superposes the signals, then server can
-only observe an aggregate update in one shared channel use and fail to
-decode each client separately. This makes OTA-FL a promising architecture
-for large-scale wireless learning, yet with a main obstacle that 
-same wireless channel can also injects noise, interference, and possible fading. 
-The server therefore receives a corrupted
-aggregate rather than the exact average update. When a plain FedAvg-style
-server updates using this noisy vector directly, heavy-tailed impulsive
-interference can cause slow convergence, oscillation, or divergence. The
-reference work ``Adaptive Federated Learning Over the Air'' studies this
-problem for adaptive methods under fading and alpha-stable interference
-\citep{wang2024adaptive}. This project follows that direction by making the
-alpha-stable tail index a core experimental variable; AWGN is treated as the
-special case $\alpha=2$.
+OTA-FL therefore scales in clients, but the same superposition also
+injects noise, interference, and possibly fading into the aggregate
+update. When the interference is heavy-tailed, a rare impulsive sample
+in a single round can be orders of magnitude larger than a typical
+client pseudo-gradient, which makes plain FedAvg-style updates
+oscillate or diverge. The reference work ``Adaptive Federated Learning
+Over the Air''~\cite{wang2024adaptive} studies this regime under
+fading and symmetric $\alpha$-stable interference. This project
+follows that direction and makes the $\alpha$-stable tail index a
+core experimental variable; AWGN is treated as the special case
+$\alpha=2$.
 
 \section{Problem Statement}
-\ \ \ \ \, This thesis studies FL over a simulated analog OTA aggregation channel.
-At communication round $t$, the server receives a noisy aggregate update $\tilde{g}^t$:
+\ \ \ \ \, This thesis studies FL over a simulated analog OTA aggregation
+channel. At communication round $t$, the server receives a noisy
+aggregate update $\tilde{g}^t$:
 \begin{equation}
     \tilde{g}^t =
     \frac{1}{N}\left(\sum_{n=1}^{N} \Delta_n^t + \xi^t\right),
 \end{equation}
-where $N$ denotes the number of clients, $\Delta_n^t$ denotes the update produced by
-client $n$, and $\xi^t$ denotes symmetric alpha-stable channel noise.
+where $N$ is the number of clients, $\Delta_n^t$ is the pseudo-gradient
+produced by client $n$, and $\xi^t$ is symmetric $\alpha$-stable channel
+noise. Smaller $\alpha$ produces heavier tails and more frequent
+impulsive outliers; $\alpha=2$ recovers the Gaussian AWGN case.
 
-When $\alpha<2$, smaller $\alpha$ means heavier tails and more frequent impulsive outliers, while $\alpha=2$ 
- recovers the Gaussian AWGN case. The central question is whether adaptive
-server optimizers can use their historical first- and second-moment states to
-make the training process more robust to this noisy aggregate.
-
-The project should not be presented as a complete reproduction of
-\citet{wang2024adaptive}. The original paper contains a full convergence
-analysis and a broader experimental suite. The current codebase implements an
-empirical simulator for the core heavy-tail mechanism: alpha-stable OTA
-aggregation, adaptive server updates, and robust MAC pre-processing. Its
-contribution is a controlled, reproducible software validation rather than a
-new theoretical optimizer.
+The central research question is concrete and experimentally testable:
+\emph{how does the final test accuracy of FedAvg-OTA, FedAvgM-OTA,
+AdaGrad-OTA, and Adam-OTA depend on the tail index $\alpha$ and the
+noise scale $\gamma$, when all four optimizers consume the same OTA
+aggregate $\tilde{g}^t$?} The project is not presented as a complete
+reproduction of~\cite{wang2024adaptive}, which contains a full
+non-convex convergence analysis and a broader empirical suite.
+The current codebase implements a controlled simulator for the core
+heavy-tail mechanism ($\alpha$-stable OTA aggregation, adaptive server
+updates, and MAC robust pre-processing) and evaluates a narrower
+robustness claim.
 
 \section{Contributions}
-The contributions of this project are as follows.
+The contributions of this thesis are split into empirical findings and
+reusable artifacts.
+
+\noindent\textbf{Findings.}
 \begin{itemize}
-    \item A modular PyTorch simulator for OTA-FL with noisy analog
-    aggregation, local client training, server-side optimization, logging,
-    result export, and plotting.
-    \item Implementations of FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, and
-    Adam-OTA as server-side optimizers that consume the OTA-aggregated
-    update.
-    \item Alpha-stable tail-index ablations that test how OTA-FL behaves as
-    the channel changes from AWGN at $\alpha=2$ to heavier-tailed
-    interference at $\alpha<2$.
-    \item A MAC versus no-MAC comparison under heavy-tailed interference,
-    testing whether robust pre-processing complements adaptive server
-    normalization.
-    \item A lightweight one-dimensional theory sketch explaining why
-    second-moment accumulation can induce automatic step-size shrinkage under
-    impulsive channel noise.
+    \item Under the implemented heavy-tail CIFAR-10 setting
+    (ResNet-18, $N=100$, 100 rounds, $\gamma=0.05$, three seeds),
+    AdaGrad-OTA and Adam-OTA outperform FedAvg-OTA and FedAvgM-OTA by
+    25--40 percentage points on final accuracy across
+    $\alpha\in\{1.1,1.3,1.5,1.7,1.9\}$, directly supporting the
+    hypothesis that fractional second-moment adaptation stabilizes
+    training in the presence of $\alpha$-stable impulsive noise.
+    \item The observed $\alpha$-trend is non-monotonic at a fixed
+    server learning rate: the best AdaGrad-OTA result is at
+    $\alpha=1.5$, and the best Adam-OTA result is at $\alpha=1.3$. This
+    is reported as a negative result relative to the reference paper's
+    monotonic trend and is framed as open to per-method learning-rate
+    tuning.
+    \item At $\alpha=1.3$, $\gamma=0.05$, $k=3$, Median Anchored
+    Clipping is empirically neutral within seed variation. The MAC
+    channel therefore demands a stronger operating point
+    (smaller $\alpha$, larger $\gamma$, or smaller $k$) before it can
+    deliver a measurable accuracy gain.
+\end{itemize}
+
+\noindent\textbf{Artifacts.}
+\begin{itemize}
+    \item A modular PyTorch OTA-FL simulator with a synchronous
+    FL training loop, four server optimizers that consume the same
+    OTA aggregate, a symmetric $\alpha$-stable channel oracle based on
+    the Chambers--Mallows--Stuck sampler, MAC pre-processing, JSON
+    result export, and plotting scripts.
+    \item A one-dimensional intuition that explains why a fractional
+    second-moment accumulator induces an automatic effective
+    learning-rate contraction on impulsive rounds, together with a
+    bound of the form
+    $\mathbb{E}[\eta_t^{\mathrm{eff}}]\lesssim \eta\cdot t^{-1/\alpha}$
+    on the long-run decay.
 \end{itemize}
 
 \section{Thesis Organization}
-Chapter 2 reviews FL, OTA aggregation, adaptive optimization, and the
-relationship between this project and the reference paper. Chapter 3
-describes the implemented system model and optimizer equations. Chapter 4
-presents the datasets, experimental settings, generated plots, and numerical
-results. Chapter 5 summarizes the outcome, limitations, and future work.
+\ \ \ \ \, Chapter~2 reviews FL, OTA aggregation, and adaptive optimization,
+and positions this project against the reference paper. Chapter~3
+describes the implemented system model and optimizer equations.
+Chapter~4 presents the datasets, experimental configuration, generated
+figures, and numerical results. Chapter~5 summarizes the outcome,
+limitations, and future work.

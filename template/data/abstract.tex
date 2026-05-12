@@ -1,39 +1,41 @@
 \centerline{\xiaoyi\bfseries Abstract}
 \vspace{4em}
 
-Federated learning enables distributed model training without moving raw
-client data, but conventional digital aggregation requires communication
-resources that grow with the number of participating clients. Analog
-over-the-air federated learning (OTA-FL) addresses this bottleneck by
-letting client updates superpose directly in the wireless multiple-access
-channel. The same physical superposition that makes OTA-FL scalable also
-injects channel noise and impulsive interference into the aggregated update.
-This is especially challenging when the interference is heavy-tailed: rare
-large perturbations can dominate a server update and destabilize plain
-FedAvg-style training.
+Over-the-air federated learning (OTA-FL) scales with the number of
+clients by letting analog client updates superpose directly in the
+wireless multiple-access channel, but the same superposition injects
+channel noise into the server-side aggregate. When the interference is
+heavy-tailed, rare but very large impulsive samples can dominate a
+FedAvg-style update and destabilize training. This thesis asks whether
+server-side adaptive optimization with a fractional second-moment
+accumulator can act as an implicit, CSI-free filter that contracts the
+effective learning rate precisely when the aggregate is impulsive.
 
-This thesis studies a PyTorch simulation framework for adaptive federated
-learning over the air under symmetric alpha-stable interference. The AWGN
-case is treated as the special case $\alpha=2$, while $\alpha<2$ models
-heavier-tailed channel perturbations. The central hypothesis is that
-server-side adaptive optimizers, especially AdaGrad-OTA and Adam-OTA, act as
-implicit channel-noise filters: when the noisy aggregate has large
-coordinate-wise magnitude, the fractional second-moment accumulator increases
-and the effective learning rate automatically contracts.
+We implement a PyTorch OTA-FL simulator with a symmetric
+$\alpha$-stable channel oracle based on the Chambers--Mallows--Stuck
+sampler, four server optimizers
+(FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, Adam-OTA) that all consume the
+same noisy aggregate, Median Anchored Clipping (MAC) as a robust
+pre-processing option, and an experiment layer that produces JSON
+logs, figures, and LaTeX tables. The AWGN case is treated as the
+special case $\alpha=2$; $\alpha<2$ models heavy-tailed
+interference.
 
-The framework implements FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, and Adam-OTA;
-modular dataset partitioning; a noisy OTA aggregation oracle based on the
-Chambers-Mallows-Stuck alpha-stable sampler; Median Anchored Clipping (MAC)
-as robust pre-processing; JSON result export; and plotting scripts. The
-revised experiments prioritize CIFAR-10 tail-index ablations and MAC
-comparisons, with MNIST used as a lightweight sanity benchmark. In the
-three-seed CIFAR-10 alpha sweep, AdaGrad-OTA and Adam-OTA substantially
-outperform FedAvg-OTA and FedAvgM-OTA under the implemented heavy-tail
-setting, although the observed alpha trend is not monotonic and the MAC
-comparison is neutral. The project is therefore not a full line-by-line
-reproduction of the reference paper, but it implements the core heavy-tail
-setting needed to evaluate a carefully scoped adaptive OTA-FL robustness
-claim.
+On CIFAR-10 (ResNet-18, $N=100$, 100 rounds, $\gamma=0.05$, 3 seeds),
+AdaGrad-OTA reaches 49.52--51.75\% final accuracy and Adam-OTA reaches
+42.88--44.82\% across $\alpha\in\{1.1,1.3,1.5,1.7,1.9\}$, compared with
+11.9\% (FedAvg-OTA) and 20.5--20.7\% (FedAvgM-OTA): a 25--40 percentage
+point margin in favor of fractional second-moment adaptation.
+MAC at the default operating point ($\alpha=1.3$, $\gamma=0.05$,
+$k=3$) is empirically neutral within seed variation, and the
+$\alpha$-trend is non-monotonic, with the best AdaGrad-OTA result at
+$\alpha=1.5$ and the best Adam-OTA result at $\alpha=1.3$. The
+project is therefore not a complete reproduction of the reference
+paper; its contribution is a reproducible empirical validation of a
+carefully scoped adaptive OTA-FL robustness claim, together with a
+one-dimensional intuition for the implicit step-size shrinkage
+mechanism.
 
 \noindent\textbf{Keywords:} federated learning; over-the-air aggregation;
-alpha-stable noise; heavy-tailed interference; adaptive optimization; MAC
+$\alpha$-stable noise; heavy-tailed interference; adaptive
+optimization; Median Anchored Clipping
