@@ -143,7 +143,7 @@ evidence.
 
 The CIFAR-10 comparison in Table \ref{tab:cifar-results} is more nuanced.
 FedAvgM-OTA is the strongest method in the controlled 200-round run, reaching
-64.42\% final accuracy. AdaGrad-OTA and Adam-OTA improve over plain
+63.94\% final accuracy. AdaGrad-OTA and Adam-OTA improve over plain
 FedAvg-OTA, but they do not exceed the momentum baseline under this specific
 CIFAR-10 configuration. Therefore, the CIFAR-10 result should not be stated as
 ``Adam-OTA is always best''. A more accurate conclusion is that adaptive
@@ -164,10 +164,10 @@ when the channel has impulsive tails.
         \hline
         Method & Final loss & Final accuracy & Best accuracy \\
         \hline
-        FedAvg-OTA & 1.6167 & 39.23\% & 39.23\% \\
-        FedAvgM-OTA & 1.0087 & 64.42\% & 64.42\% \\
-        AdaGrad-OTA & 1.5217 & 43.11\% & 43.58\% \\
-        Adam-OTA & 1.6262 & 41.29\% & 41.64\% \\
+        FedAvg-OTA & 1.6184 & 38.93\% & 38.93\% \\
+        FedAvgM-OTA & 1.0087 & 63.94\% & 63.94\% \\
+        AdaGrad-OTA & 1.5359 & 42.38\% & 42.70\% \\
+        Adam-OTA & 1.6576 & 40.66\% & 40.66\% \\
         \hline
     \end{tabular}
 \end{table}
@@ -281,7 +281,6 @@ effect of rare impulsive coordinates when $\alpha<2$.
     \begin{table}[!htbp]
         \centering
         \caption{CIFAR-10 MAC comparison under heavy-tailed interference}
-        \label{tab:mac-compare}
         \begin{tabular}{c|c}
             \hline
             Result file & Status \\
@@ -413,7 +412,7 @@ denominator, and a shorter training budget. (ii) MAC at the default
 $\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point yields no
 measurable improvement within seed variation. (iii) The Adam-OTA
 CIFAR-10 result at $\alpha=2$ in Table~\ref{tab:cifar-results}
-(41.29\%) is below FedAvgM-OTA (64.42\%), showing that second-moment
+(40.66\%) is below FedAvgM-OTA (63.94\%), showing that second-moment
 normalization is not costless in the Gaussian regime.
 
 \subsection{Threats to Validity}

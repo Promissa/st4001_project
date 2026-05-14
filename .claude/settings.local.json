@@ -11,7 +11,13 @@
       "Bash(grep -n \"h_{n,t}\\\\|h_\\\\{n,t\\\\}\" /home/pr/Documents/codes/st4001_project/src/experiments/federated.py)",
       "Bash(git -C /home/pr/Documents/codes/st4001_project diff --stat template/data/ template/ref.bib)",
       "Bash(kpsewhich texgyretermes-regular.otf)",
-      "Bash(tlmgr info *)"
+      "Bash(tlmgr info *)",
+      "Bash(pdflatex -interaction=nonstopmode main.tex)",
+      "Bash(xelatex -interaction=nonstopmode main.tex)",
+      "Bash(rm -f *.aux data/*.aux *.log *.out *.toc)",
+      "Bash(rm -f *.synctex.gz)",
+      "Bash(rm -f ./*.synctex.gz)",
+      "Bash(grep -n -B2 \"Missing \\\\$ inserted\" main.log)"
     ]
   }
 }

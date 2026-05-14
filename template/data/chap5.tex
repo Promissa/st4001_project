@@ -15,7 +15,7 @@ The claim is scoped rather than absolute. The observed $\alpha$-trend
 is non-monotonic at a fixed server learning rate; MAC at the default
 $\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point is empirically
 neutral; and in the $\alpha=2$ CIFAR-10 comparison FedAvgM-OTA
-remains the strongest method (64.42\%), which shows that fractional
+remains the strongest method (63.94\%), which shows that fractional
 second-moment normalization is not costless in the Gaussian regime.
 The main output is therefore a reproducible PyTorch simulator with
 $\alpha$-stable tail-index experiments, MAC robustness comparisons,
@@ -34,32 +34,3 @@ or real wireless testbed validation. Fourth, the empirical evidence is
 bounded by three seeds and a single global server learning rate per
 experiment, so the non-monotonic $\alpha$-trend cannot yet be
 disentangled from lr-mismatch (see~\S4.5 and~\S4.8.3).
-
-\section{Future Work}
-\label{sec:future-work}
-\ \ \ \ \, The following extensions are ordered by estimated effort.
-
-\noindent\textbf{Short-term (within one week).}
-(a) Per-$(\text{method},\alpha)$ server-learning-rate sweep at
-$\alpha\in\{1.3,1.7\}$ using \path{src/experiments/lr_sweep.py} to
-test whether the non-monotonic trend is robust to lr-tuning;
-(b) extend the seed count from 3 to 5 for the main $\alpha$ ablation
-so that $\pm$ standard deviations tighten below the method-to-method
-gap; (c) run the MAC $(k,\gamma)$ sweep at $\alpha\in\{1.1,1.3\}$
-to identify an operating region where MAC produces a measurable gain.
-
-\noindent\textbf{Medium-term (within one month).}
-Add Rayleigh fading coefficients $h_{n,t}\sim\mathcal{CN}(0,1)$ with
-per-client power control $\mathbb{E}|h_{n,t}\Delta_n^t|^2\le\bar P$,
-decouple the channel tail index from the optimizer denominator
-$\alpha$ so that the two degrees of freedom can be studied
-independently, and log per-round mechanism diagnostics
-($\|v_t\|$, $\|\tilde g_t\|$, effective step ratio) to produce the
-mechanism plot that the current results do not yet include.
-
-\noindent\textbf{Long-term (three to six months).}
-Validate the simulator on a software-defined-radio testbed
-(USRP X310 and GNU Radio) with multiple transmit clients and a single
-server receiver, and replace the one-dimensional closed-form with a
-multi-dimensional convergence proof specific to the implemented
-fractional-moment update.

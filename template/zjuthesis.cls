@@ -28,9 +28,13 @@
   {\setmainfont{TeX Gyre Termes}}
 
 \RequirePackage{amsmath,amssymb}
+% Equation numbering style: (Chapter-Equation), e.g., (2-1), (2-2)
+\numberwithin{equation}{chapter}
+\renewcommand{\theequation}{\thechapter-\arabic{equation}}
 \RequirePackage{graphicx}
 \RequirePackage{ulem}
 \RequirePackage{setspace}
+\RequirePackage{indentfirst}
 
 \DeclareRobustCommand{\chuhao}{\fontsize{42pt}{50.4pt}\selectfont}
 \DeclareRobustCommand{\xiaochu}{\fontsize{36pt}{43.2pt}\selectfont}
@@ -164,19 +168,17 @@
         \multicolumn{10}{|c|}{\xiaosi\textbf{Content Checklist}}                            & \multicolumn{2}{c|}{\xiaosi\bf\makecell{Evaluation                                                                                                                                                                                                                    \\ Section (√)}}                                                                                                                                                        \\
         \hline
         \multirow{14}{*}{\xiaosi\bf\makebox[1cm]{\rotatebox[origin=c]{-90}{Senior Thesis}}} & \multicolumn{9}{l|}{1. Cover (Use the unified cover, blue recommended)}      & {Good} & Fair                                                                                                                                                                          \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{2. Academic Integrity Commitment of Senior Thesis}       & {}     &                                                                                                                                                                               \\
+        \cline{2-12}                                                                        & \multicolumn{9}{l|}{2. Academic integrity Commitment of Senior Thesis}       & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{3.    Acknowledgements}                                  & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{4. Abstract}                                             & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{5. Table of Contents}                                    & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{6. Main Content (Page numbers start from the main text)} & {}     &                                                                                                                                                                               \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{7. References}                                           & {}     &                                                                                                                                                                               \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{8. Appendix (if needed)}                                 & {}     &                                                                                                                                                                               \\
+        \cline{2-12}                                                                        & \multicolumn{9}{l|}{7. Reference}                                            & {}     &                                                                                                                                                                               \\
+        \cline{2-12}                                                                        & \multicolumn{9}{l|}{8. Appendix (if need)}                                   & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{9.   Author's Biography}                                 & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{10. Task plan of senior thesis}                          & {}     &                                                                                                                                                                               \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{11.   Assessment form of project proposal}               & {}     &                                                                                                                                                                               \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{12. Assessment Form of senior thesis}                    & {}     &                                                                                                                                                                               \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{13. Review Form of senior thesis}                        & {}     &                                                                                                                                                                               \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{14. On-site Minutes Form of Oral Defense}                & {}     &                                                                                                                                                                               \\
+        \cline{2-12}                                                                        & \multicolumn{9}{l|}{11. Assessment Form of senior thesis}                    & {}     &                                                                                                                                                                               \\
+        \cline{2-12}                                                                        & \multicolumn{9}{l|}{12. On-site Minutes Form of Oral Defense}                & {}     &                                                                                                                                                                               \\
         \hline
         \multicolumn{6}{|l|}{Signature of Supervisor: \makebox[4.5cm]{\makecell[t]{~                                                                                                                                                                                                                                                                                \\~\\~\\~\\}}}                           & \multicolumn{6}{l|}{Date:} \\
         \hline
@@ -189,7 +191,7 @@
     \clearpage
     \centerline{\includegraphics[width=9.85cm]{images/logo2.png}}
     \vspace{1.2cm}
-    \centerline{\bfseries\xiaoer Academic Integrity Commitment of Senior Thesis }
+    \centerline{\bfseries\xiaoer Academic integrity Commitment of Senior Thesis }
     \vspace{1.2cm}
 
     \setlength{\parskip}{10pt}
@@ -256,8 +258,8 @@
 % \doublespacing
 
 \RequirePackage{caption}
-\captionsetup[figure]{labelfont={bf,normalsize},labelsep=space,justification=centering,singlelinecheck=false}
-\captionsetup[table]{labelfont={bf,normalsize},labelsep=space,justification=centering,singlelinecheck=false}
+\captionsetup[figure]{labelfont={bf,normalsize},labelsep=space,justification=raggedright,singlelinecheck=true}
+\captionsetup[table]{labelfont={bf,normalsize},labelsep=space,justification=raggedright,singlelinecheck=true}
 
 \RequirePackage{array}
 
@@ -269,10 +271,9 @@
 \titlecontents{subsection}[2em]{\xiaosi}{\thecontentslabel\;}{}{\hspace{.5em}\titlerule*{.}\contentspage}[\vspace{5pt}]
 \setcounter{tocdepth}{2}
 
-\RequirePackage{url}
-\urlstyle{same}
 \RequirePackage[numbers,sort&compress]{natbib}
 \RequirePackage{hyperref}
+\urlstyle{same}
 
 % \renewcommand{cmd}{def}
 

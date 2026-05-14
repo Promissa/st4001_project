@@ -1,7 +1,7 @@
 \chapter{Introduction}
 
 \section{Motivation}
-\ \ \ \ \, Federated learning (FL) trains a shared model across distributed
+Federated learning (FL) trains a shared model across distributed
 clients without requiring those clients to upload raw data, which is
 attractive for edge intelligence because it reduces privacy exposure
 and keeps data near its source device~\cite{mcmahan2017communication}.
@@ -26,7 +26,7 @@ core experimental variable; AWGN is treated as the special case
 $\alpha=2$.
 
 \section{Problem Statement}
-\ \ \ \ \, This thesis studies FL over a simulated analog OTA aggregation
+This thesis studies FL over a simulated analog OTA aggregation
 channel. At communication round $t$, the server receives a noisy
 aggregate update $\tilde{g}^t$:
 \begin{equation}
@@ -54,7 +54,7 @@ robustness claim.
 The contributions of this thesis are split into empirical findings and
 reusable artifacts.
 
-\noindent\textbf{Findings.}
+\noindent\textbf{Findings}
 \begin{itemize}
     \item Under the implemented heavy-tail CIFAR-10 setting
     (ResNet-18, $N=100$, 100 rounds, $\gamma=0.05$, three seeds),
@@ -76,7 +76,7 @@ reusable artifacts.
     deliver a measurable accuracy gain.
 \end{itemize}
 
-\noindent\textbf{Artifacts.}
+\noindent\textbf{Artifacts}
 \begin{itemize}
     \item A modular PyTorch OTA-FL simulator with a synchronous
     FL training loop, four server optimizers that consume the same
@@ -92,7 +92,7 @@ reusable artifacts.
 \end{itemize}
 
 \section{Thesis Organization}
-\ \ \ \ \, Chapter~2 reviews FL, OTA aggregation, and adaptive optimization,
+Chapter~2 reviews FL, OTA aggregation, and adaptive optimization,
 and positions this project against the reference paper. Chapter~3
 describes the implemented system model and optimizer equations.
 Chapter~4 presents the datasets, experimental configuration, generated

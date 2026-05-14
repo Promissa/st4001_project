@@ -401,6 +401,11 @@ mac_sweep() {
     --out_dir "$FIGURE_DIR"
 }
 
+new_sweep() {
+    lr_sweep
+    mac_sweep
+}
+
 core_heavytail() {
   alpha_sanity
   alpha_ablation
@@ -496,7 +501,7 @@ EOF
 main() {
   local module="${1:-help}"
   case "$module" in
-    runall|workflow|quickcheck|setup|data|train|train_mnist|train_cifar|compare|compare_mnist|compare_cifar|ablation|ablation_noise|ablation_clients|plot|alpha_sanity|alpha_ablation|mac_compare|core_heavytail|paper_update|mechanism|lr_sweep|mac_sweep|heavy_tail_compare|paper_like_compare|help)
+    runall|workflow|quickcheck|setup|data|train|train_mnist|train_cifar|compare|compare_mnist|compare_cifar|ablation|ablation_noise|ablation_clients|plot|alpha_sanity|alpha_ablation|mac_compare|core_heavytail|paper_update|mechanism|lr_sweep|mac_sweep|heavy_tail_compare|paper_like_compare|help|new_sweep)
       "$module"
       ;;
     *)

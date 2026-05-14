@@ -44,7 +44,7 @@ Deviation (MAD), and projects every coordinate into the resulting band:
 The first equation defines the anchor, the second sets the clipping radius
 $\tau$ as $k$ times the MAD of the aggregate, and the third clips each
 coordinate's deviation from the anchor to the band $[-\tau,\tau]$ and adds
-the anchor back. $k$ is the clipping factor; the default setting is $k=3$,
+the anchor back. $k$ here serves as the clipping factor with default setting $k=3$,
 which matches the implementation in \path{src/channel/mac.py}. MAC is
 expected to have little effect in the Gaussian endpoint, but it can reduce
 rare impulsive coordinates when $\alpha<2$.
@@ -54,12 +54,14 @@ The plain OTA baseline applies the noisy aggregate directly:
 \begin{equation}
     w_{t+1} = w_t - \eta \tilde{g}^t.
 \end{equation}
+
 The momentum baseline maintains a first-moment buffer:
 \begin{equation}
     m_t = \rho m_{t-1} + \tilde{g}^t,
     \quad
     w_{t+1} = w_t - \eta m_t.
 \end{equation}
+
 These baselines are useful because they isolate whether the second-moment
 normalization in adaptive methods provides additional robustness beyond
 simple smoothing.

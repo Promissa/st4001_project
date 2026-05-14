@@ -1,7 +1,7 @@
 \chapter{Background and Related Work}
 
 \section{Federated Learning}
-\ \ \ \ \, Federated learning considers the optimization of a global model
+Federated learning considers the optimization of a global model
 over data distributed across multiple clients. If client $n$ contributes
 local data $\mathcal{D}_n$, the global objective is
 \begin{equation}
@@ -26,7 +26,7 @@ comprehensive treatment of open problems in FL is given by
 \cite{wang2021field}.
 
 \section{Analog Over-the-Air Aggregation}
-\ \ \ \ \, Over-the-air computation exploits the physical superposition of
+Over-the-air computation exploits the physical superposition of
 simultaneously transmitted analog signals over the wireless
 multiple-access channel, so that the receiver directly observes a
 function (here, a sum) of client inputs rather than decoding each
@@ -45,7 +45,7 @@ symmetric $\alpha$-stable distribution
 \cite{nikias1995alphastable,win2009mathematical}.
 
 \section{Adaptive Gradient Methods}
-\ \ \ \ \, Adaptive optimizers adapt the learning rate separately for each
+Adaptive optimizers adapt the learning rate separately for each
 variable based on historical gradients. AdaGrad accumulates squared
 gradients and scales each coordinate's learning rate inversely to the
 square root of its accumulated magnitude~\cite{duchi2011adaptive}. Adam
@@ -67,7 +67,7 @@ project tests whether this feedback loop is visible in training curves
 and ablation studies.
 
 \section{Robust Aggregation under Impulsive Noise}
-\ \ \ \ \, Heavy-tailed and Byzantine perturbations motivate a parallel line of
+Heavy-tailed and Byzantine perturbations motivate a parallel line of
 work on robust aggregation. Krum selects one gradient closest to its
 neighbours in $\ell_2$ distance~\cite{blanchard2017krum}; coordinate-wise
 median and trimmed mean tolerate up to a constant fraction of
@@ -79,7 +79,7 @@ deviation~\cite{huber2009robust,hampel1986robustbook} are exactly the
 primitives used in Median Anchored Clipping.
 
 \section{Positioning Relative to the Reference Paper}
-\ \ \ \ \, The reference paper proposes adaptive federated learning over the
+The reference paper proposes adaptive federated learning over the
 air and studies AdaGrad-like and Adam-like server updates with
 theoretical analysis under $\alpha$-stable
 interference~\cite{wang2024adaptive}. It evaluates multiple image and
