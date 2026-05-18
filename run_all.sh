@@ -27,7 +27,7 @@ LOCAL_EPOCHS="${LOCAL_EPOCHS:-5}"
 BATCH_SIZE="${BATCH_SIZE:-128}"
 COMPARE_BATCH_SIZE="${COMPARE_BATCH_SIZE:-64}"
 SERVER_LR="${SERVER_LR:-0.01}"
-COMPARE_SERVER_LR="${COMPARE_SERVER_LR:-0.1}"
+COMPARE_SERVER_LR="${COMPARE_SERVER_LR:-0.01}"
 ABLATION_SERVER_LR="${ABLATION_SERVER_LR:-1e-4}"
 LOCAL_LR="${LOCAL_LR:-0.01}"
 MOMENTUM="${MOMENTUM:-0.9}"
@@ -373,7 +373,7 @@ lr_sweep() {
 }
 
 mac_sweep() {
-  local mac_ks="${MAC_K_SWEEP:-0,1,2,3,5}"
+  local mac_ks="${MAC_K_SWEEP:-0,1,3,5}"
   local mac_gammas="${MAC_GAMMA_SWEEP:-0.05,0.1,0.2}"
   run_cmd uv run -m src.experiments.heavy_tail --study mac_sweep \
     --dataset "$DATASET" \

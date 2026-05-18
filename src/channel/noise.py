@@ -32,8 +32,9 @@ def sample_alpha_stable(
         return torch.zeros(size, device=device, dtype=torch.float32)
 
     if alpha == 2:
-        # Gaussian special case: scale maps to std = sqrt(2) * gamma
-        return torch.randn(size, device=device, dtype=torch.float32) * (scale * (2 ** 0.5))
+        # Gaussian special case: use scale directly as std so that alpha=2.0
+        # is the cleanest channel (lighter tails than any alpha<2 at same scale).
+        return torch.randn(size, device=device, dtype=torch.float32) * scale
 
     # CMS method directly in torch. On CUDA this avoids NumPy CPU generation
     # and a large host->device transfer for every parameter tensor.

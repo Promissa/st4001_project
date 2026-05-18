@@ -283,11 +283,12 @@ def run_round(
                 if name in buffer_sums:
                     buffer_sums[name].add_(local_buf.detach())
 
-    # Step 3: OTA aggregation → g_t (normalized by N)
+    # Step 3: OTA aggregation → g_t (normalized by N, then divided by local_lr
+    # to recover the true average gradient from the pseudo-gradient Δ_n).
     agg_grads = []
     for delta_sum in delta_sums:
         noisy_sum = oracle.aggregate_sum(delta_sum) if hasattr(oracle, "aggregate_sum") else oracle.aggregate([delta_sum])
-        agg_grads.append(noisy_sum / N)
+        agg_grads.append(noisy_sum / (N * local_lr))
 
     # Step 4: optional MAC pre-processing
     if use_mac:

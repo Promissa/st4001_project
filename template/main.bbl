@@ -1,4 +1,4 @@
-\begin{thebibliography}{26}
+\begin{thebibliography}{27}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{#1}
 \expandafter\ifx\csname urlstyle\endcsname\relax\else
@@ -184,5 +184,11 @@ Chambers J~M, Mallows C~L, Stuck B~W.
 \newblock A method for simulating stable random variables\allowbreak[J].
 \newblock Journal of the American Statistical Association, 1976, 71\allowbreak
   (354): 340-344.
+
+\bibitem[Li et~al.(2024)Li, Chen, Chong, Das, Quek, and Yang]{li2024robustmac}
+Li J, Chen Z, Chong K~F~E, et~al.
+\newblock Robust federated learning over the air: Combating heavy-tailed noise
+  with median anchored clipping\allowbreak[A].
+\newblock 2024.
 
 \end{thebibliography}

@@ -269,8 +269,35 @@ adaptive robustness relative to the implemented baselines, not as a full
 reproduction of the reference paper's tail-index convergence trend.
 
 \section{MAC Robust Pre-Processing}
-The second revised experiment compares training with and without Median
-Anchored Clipping under a heavy-tailed setting. The default comparison uses
+Median Anchored Clipping (MAC) is a robust pre-processing technique
+proposed by Li et al.~\cite{li2024robustmac} specifically for OTA-FL
+under heavy-tailed $\alpha$-stable channel noise. It operates on the
+server-side aggregated gradient $\tilde{g}^t$ before the optimizer step:
+(1)~compute the coordinate-wise median~$m$, (2)~center the gradient
+as $\tilde{g}^t - m$, (3)~clip each centered coordinate to
+$[-k\cdot\mathrm{MAD},\,+k\cdot\mathrm{MAD}]$ where
+$\mathrm{MAD}=\mathrm{median}(|\tilde{g}^t-m|)$, and (4)~restore the
+median. Because the median is a robust statistic, MAC is far less
+sensitive to extreme outliers than gradient-norm clipping and preserves
+the proportional relationships among gradient
+dimensions~\cite{li2024robustmac}.
+
+From a theoretical standpoint, MAC is not expected to pair well with
+adaptive methods such as AdaGrad-OTA and Adam-OTA. MAC removes
+impulsive outliers before the optimizer sees them, whereas adaptive
+methods already provide implicit noise filtering: when a coordinate
+of $\tilde{g}^t$ is large, the fractional second-moment accumulator
+$v_t$ grows, which automatically shrinks the effective step size for
+that coordinate in the next update. MAC clips the very signal that
+the adaptive denominator uses to gauge impulsiveness; consequently,
+the accumulator cannot contract the learning rate on rounds where
+the channel is noisy. The two mechanisms are therefore redundant at
+best and counter-productive at worst. For non-adaptive baselines
+(FedAvg-OTA and FedAvgM-OTA), MAC may still help because these
+methods lack any built-in outlier shrinkage.
+
+To test these predictions empirically, we compare training with and without MAC
+under a heavy-tailed setting. The default comparison uses
 $\alpha=1.3$, $\gamma=0.05$, and clipping factor $k=3$. MAC is not expected
 to change the Gaussian endpoint dramatically, but it should reduce the
 effect of rare impulsive coordinates when $\alpha<2$.
@@ -307,14 +334,18 @@ effect of rare impulsive coordinates when $\alpha<2$.
 \end{figure}
 
 In the completed MAC comparison, clipping does not create a meaningful
-accuracy improvement. FedAvg-OTA and FedAvgM-OTA change by less than 0.1
-percentage points. AdaGrad-OTA changes from 50.35\% to 50.37\%, which is
-negligible relative to the seed variation. Adam-OTA decreases from 45.09\%
-to 44.40\%. We interpret this negative result mechanistically: at
-$\gamma=0.05$ the typical coordinate-wise magnitude of $\xi^t$ is already
-small, the empirical fraction of coordinates that violate the MAD band
+accuracy improvement. MAC implementation in all four methods does not review any
+significant difference that solid enough to prove its validity, which 
+is consistent with the theoretical discussion
+above: for adaptive methods, MAC clips the outliers before the
+fractional accumulator can measure them, so the adaptive denominator
+lacks the signal it needs to contract the step size. For non-adaptive
+baselines, MAC could in principle help, but at $\gamma=0.05$ the typical
+coordinate-wise magnitude of $\xi^t$ is already small and the empirical
+fraction of coordinates that violate the MAD band
 $[m-k\cdot\mathrm{MAD},\,m+k\cdot\mathrm{MAD}]$ at $k=3$ is below roughly
-$0.5\%$ per round, and MAC therefore has almost no signal to work on.
+$0.5\%$ per round; MAC therefore has almost no signal to work on even
+for the baselines.
 A meaningful MAC effect is expected to require a more impulsive operating
 point (smaller $\alpha$, larger $\gamma$, or smaller $k$), which we
 explore in the \texttt{mac\_sweep} extension in
