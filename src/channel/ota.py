@@ -1,8 +1,9 @@
 """
 Analog Over-the-Air (A-OTA) aggregation - the "Noisy Oracle".
 
-Models gradient aggregation with additive channel noise:
-    g_t = (1/N) * sum_n grad f_n(w_t) + xi_t
+Models over-the-air aggregation with additive channel noise. The caller decides
+whether the transmitted tensor is a raw gradient, pseudo-gradient, or model
+delta, and applies the experiment-specific normalization after aggregation.
 
 alpha=2 gives AWGN. alpha<2 gives symmetric alpha-stable heavy-tailed
 interference, which is the core channel setting for the heavy-tail
@@ -17,8 +18,8 @@ class NoisyOracle:
     """
     Simulates the A-OTA gradient aggregation channel.
 
-    Clients transmit gradients simultaneously; the server receives
-    their noise-corrupted superposition.
+    Clients transmit tensors simultaneously; the server receives their
+    noise-corrupted superposition.
     """
 
     def __init__(
@@ -78,14 +79,13 @@ class NoisyOracle:
 
     def aggregate(self, gradients: list[torch.Tensor]) -> torch.Tensor:
         """
-        Aggregate client gradients over the air.
+        Aggregate client tensors over the air.
 
         Args:
-            gradients: List of raw local gradients ∇f_n(w_t), one per client.
-                       All tensors must have the same shape.
+            gradients: List of same-shaped client tensors.
 
         Returns:
-            Noisy aggregated gradient g_t (not yet divided by N — caller normalizes).
+            Noisy aggregate sum. The caller applies any required normalization.
         """
         stacked = torch.stack(gradients)  # (N, *param_shape)
         aggregated = stacked.sum(dim=0)

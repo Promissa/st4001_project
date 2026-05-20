@@ -27,7 +27,7 @@ LOCAL_EPOCHS="${LOCAL_EPOCHS:-5}"
 BATCH_SIZE="${BATCH_SIZE:-128}"
 COMPARE_BATCH_SIZE="${COMPARE_BATCH_SIZE:-64}"
 SERVER_LR="${SERVER_LR:-0.01}"
-COMPARE_SERVER_LR="${COMPARE_SERVER_LR:-0.01}"
+COMPARE_SERVER_LR="${COMPARE_SERVER_LR:-0.1}"
 ABLATION_SERVER_LR="${ABLATION_SERVER_LR:-1e-4}"
 LOCAL_LR="${LOCAL_LR:-0.01}"
 MOMENTUM="${MOMENTUM:-0.9}"
@@ -39,18 +39,20 @@ MAC_ALPHA="${MAC_ALPHA:-1.3}"
 MAC_CLIP="${MAC_CLIP:-3.0}"
 NOISE_SCALE="${NOISE_SCALE:-0.05}"
 DIR_CONC="${DIR_CONC:-0.1}"
-HEAVYTAIL_LOCAL_EPOCHS="${HEAVYTAIL_LOCAL_EPOCHS:-5}"
+HEAVYTAIL_LOCAL_EPOCHS="${HEAVYTAIL_LOCAL_EPOCHS:-1}"
 AMP="${AMP:-1}"
 AMP_DTYPE="${AMP_DTYPE:-bf16}"
 CHANNELS_LAST="${CHANNELS_LAST:-1}"
 FAST_DATA="${FAST_DATA:-auto}"
 EVAL_EVERY="${EVAL_EVERY:-5}"
+COMPARE_EVAL_EVERY="${COMPARE_EVAL_EVERY:-1}"
 EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-1024}"
 DIAGNOSTICS_EVERY="${DIAGNOSTICS_EVERY:-0}"
+MAX_EVAL_LOSS="${MAX_EVAL_LOSS:-1e6}"
 
 COMPARISON_DIR="${COMPARISON_DIR:-results/comparison}"
 ABLATION_DIR="${ABLATION_DIR:-results/ablation}"
-HEAVYTAIL_DIR="${HEAVYTAIL_DIR:-results/heavytail}"
+HEAVYTAIL_DIR="${HEAVYTAIL_DIR:-results/heavytail1}"
 FIGURE_DIR="${FIGURE_DIR:-results/figures}"
 SINGLE_DIR="${SINGLE_DIR:-results/single}"
 GENERATED_TEX_DIR="${GENERATED_TEX_DIR:-template/data/generated}"
@@ -61,6 +63,10 @@ ACCELERATOR_FLAGS=(
   --eval_every "$EVAL_EVERY"
   --eval_batch_size "$EVAL_BATCH_SIZE"
   --diagnostics_every "$DIAGNOSTICS_EVERY"
+)
+
+HEAVYTAIL_GUARD_FLAGS=(
+  --max_eval_loss "$MAX_EVAL_LOSS"
 )
 
 case "$AMP" in
@@ -147,7 +153,8 @@ compare_cifar() {
     --non_iid \
     --dir_conc "$DIR_CONC" \
     --out_dir "$COMPARISON_DIR" \
-    "${ACCELERATOR_FLAGS[@]}"
+    "${ACCELERATOR_FLAGS[@]}" \
+    --eval_every "$COMPARE_EVAL_EVERY"
 }
 
 compare_mnist() {
@@ -160,7 +167,8 @@ compare_mnist() {
     --noise_scale "$NOISE_SCALE" \
     --beta2 "$BETA2" \
     --out_dir "$COMPARISON_DIR" \
-    "${ACCELERATOR_FLAGS[@]}"
+    "${ACCELERATOR_FLAGS[@]}" \
+    --eval_every "$COMPARE_EVAL_EVERY"
 }
 
 compare() {
@@ -248,6 +256,7 @@ alpha_sanity() {
     --log_every 1 \
     --save_diagnostics \
     --out_dir "$HEAVYTAIL_DIR/sanity" \
+    "${HEAVYTAIL_GUARD_FLAGS[@]}" \
     "${ACCELERATOR_FLAGS[@]}"
 }
 
@@ -265,10 +274,11 @@ alpha_ablation() {
     --beta2 "$BETA2" \
     --noise_scale "$NOISE_SCALE" \
     --alphas "$ALPHA_VALUES" \
-    --seeds "$SEEDS" \
-    --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
+    --seeds "42" \
+    --methods "${METHODS:-fedavg,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
     --out_dir "$HEAVYTAIL_DIR" \
+    "${HEAVYTAIL_GUARD_FLAGS[@]}" \
     "${ACCELERATOR_FLAGS[@]}"
 }
 
@@ -291,6 +301,7 @@ mac_compare() {
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
     --out_dir "$HEAVYTAIL_DIR" \
+    "${HEAVYTAIL_GUARD_FLAGS[@]}" \
     "${ACCELERATOR_FLAGS[@]}"
 }
 
@@ -332,6 +343,7 @@ mechanism() {
     --dir_conc "$DIR_CONC" \
     --save_diagnostics \
     --out_dir "$HEAVYTAIL_DIR/mechanism" \
+    "${HEAVYTAIL_GUARD_FLAGS[@]}" \
     "${ACCELERATOR_FLAGS[@]}"
 
   # Mechanism plots are one per alpha key inside the JSON.
@@ -365,6 +377,7 @@ lr_sweep() {
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
     --out_dir "$HEAVYTAIL_DIR" \
+    "${HEAVYTAIL_GUARD_FLAGS[@]}" \
     "${ACCELERATOR_FLAGS[@]}"
 
   run_cmd uv run -m src.experiments.plot \
@@ -394,6 +407,7 @@ mac_sweep() {
     --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
     --out_dir "$HEAVYTAIL_DIR" \
+    "${HEAVYTAIL_GUARD_FLAGS[@]}" \
     "${ACCELERATOR_FLAGS[@]}"
 
   run_cmd uv run -m src.experiments.plot \

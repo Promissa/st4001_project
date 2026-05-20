@@ -6,7 +6,7 @@ Round structure (one communication round t):
   2. Each client n runs E local SGD epochs and reports the pseudo-gradient
      Δ_n^t = w_t − [w_n^t]^(E)  ≈  +η_local · Σ ∇f_n(w_t).
   3. All clients transmit simultaneously; the server receives the OTA aggregate
-     g_t = (1/N) * (Σ_n Δ_n^t + ξ_t)  via NoisyOracle.
+     g_t = (1/(N η_local)) * (Σ_n Δ_n^t + ξ_t) via NoisyOracle.
      This project does not model fading or power control, so there is no
      per-client channel coefficient — the only channel effect is the additive
      symmetric α-stable interference ξ_t.
@@ -285,14 +285,26 @@ def run_round(
 
     # Step 3: OTA aggregation → g_t (normalized by N, then divided by local_lr
     # to recover the true average gradient from the pseudo-gradient Δ_n).
+    normalizer = N * local_lr
     agg_grads = []
+    clean_grads = [] if return_diagnostics else None
     for delta_sum in delta_sums:
+        if clean_grads is not None:
+            clean_grads.append(delta_sum / normalizer)
         noisy_sum = oracle.aggregate_sum(delta_sum) if hasattr(oracle, "aggregate_sum") else oracle.aggregate([delta_sum])
-        agg_grads.append(noisy_sum / (N * local_lr))
+        agg_grads.append(noisy_sum / normalizer)
 
     # Step 4: optional MAC pre-processing
+    mac_stats = None
     if use_mac:
-        agg_grads = apply_mac(agg_grads, clip_factor=mac_clip)
+        if return_diagnostics:
+            agg_grads, mac_stats = apply_mac(
+                agg_grads,
+                clip_factor=mac_clip,
+                return_stats=True,
+            )
+        else:
+            agg_grads = apply_mac(agg_grads, clip_factor=mac_clip)
 
     diagnostics = None
     if return_diagnostics:
@@ -304,8 +316,24 @@ def run_round(
             "agg_max_abs": _list_max_abs(agg_grads) if agg_finite else float("inf"),
             "use_mac": use_mac,
         }
+        if clean_grads is not None:
+            clean_finite = _list_finite(clean_grads)
+            clean_norm = _list_norm(clean_grads) if clean_finite else float("inf")
+            diagnostics["clean_grad_finite"] = clean_finite
+            diagnostics["clean_grad_norm"] = clean_norm
+            diagnostics["clean_grad_max_abs"] = (
+                _list_max_abs(clean_grads) if clean_finite else float("inf")
+            )
         if hasattr(oracle, "diagnostics"):
             diagnostics.update(oracle.diagnostics())
+            diagnostics["noise_norm_normalized"] = diagnostics["noise_norm"] / normalizer
+            diagnostics["noise_max_abs_normalized"] = diagnostics["noise_max_abs"] / normalizer
+            if clean_grads is not None and diagnostics.get("clean_grad_norm", 0.0) > 0:
+                diagnostics["noise_to_clean_norm"] = (
+                    diagnostics["noise_norm_normalized"] / diagnostics["clean_grad_norm"]
+                )
+        if mac_stats is not None:
+            diagnostics.update(mac_stats)
 
         if not agg_finite:
             return diagnostics

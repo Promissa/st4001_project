@@ -19,16 +19,19 @@ direction of $F$ up to channel noise. The OTA oracle aggregates these
 pseudo-gradients:
 \begin{equation}
     \tilde{g}^t =
-    \frac{1}{N}
+    \frac{1}{N\eta_{\rm loc}}
     \left(\sum_{n=1}^{N} \Delta_n^t + \xi^t\right),
     \quad
     \xi^t \sim S\alpha S(\gamma),
 \end{equation}
 where $S\alpha S(\gamma)$ denotes a symmetric $\alpha$-stable random
-vector with tail index $\alpha$ and scale $\gamma$. The special case
-$\alpha=2$ corresponds to AWGN with standard deviation
-$\sqrt{2}\,\gamma$ under the sampler convention. The server optimizer
-receives $\tilde{g}^t$ and updates the global model in place.
+vector with tail index $\alpha$ and scale $\gamma$. The division by
+$\eta_{\rm loc}$ converts the local parameter difference back into an
+average-gradient scale, matching the implementation in
+\path{src/experiments/federated.py}. The special case $\alpha=2$
+corresponds to AWGN with standard deviation $\sqrt{2}\,\gamma$ under the
+sampler convention. The server optimizer receives $\tilde{g}^t$ and
+updates the global model in place.
 
 \section{Median Anchored Clipping}
 The simulator includes Median Anchored Clipping (MAC) as a robust
@@ -111,10 +114,110 @@ $\varepsilon=10^{-8}$ is kept. The asymmetry between the two optimizers
 is the dominant reason why their early-round test-loss transients in
 Figure~\ref{fig:cifar-curves} differ in shape.
 
-\section{One-Dimensional Intuition}
-The project does not reproduce the full proof in \cite{wang2024adaptive}.
-Instead, the core mechanism can be seen in a one-dimensional quadratic toy
-problem
+\section{Finite-Trace Stability Analysis}
+\label{sec:finite-trace-stability}
+The project does not reproduce the full non-convex convergence proof in
+\cite{wang2024adaptive}. It does, however, admit a rigorous finite-trace
+analysis that matches the implemented simulator. The analysis is
+coordinate-wise and concerns the denominator that turns a noisy OTA
+aggregate into an adaptive server step. For a fixed coordinate $i$, let
+$z_t$ denote the quantity accumulated by the optimizer: $z_t=s_{t,i}$ for
+AdaGrad-OTA and $z_t=\tilde g^t_i$ for Adam-OTA. Define $x_t=|z_t|$.
+
+\paragraph{Moment caveat.}
+For a non-Gaussian symmetric $\alpha$-stable random variable
+($0<\alpha<2$), $\mathbb{E}|\xi|^p$ is finite only for $0<p<\alpha$ and
+is infinite for $p\geq\alpha$~\cite{nikias1995alphastable}; the endpoint
+$\alpha=2$ is the Gaussian case. Therefore, in the heavy-tailed regime
+$\alpha<2$, the usual bounded-variance SGD argument is not the right tool,
+and even the population $\alpha$-moment used by the fractional accumulator
+need not exist. The implemented algorithms instead operate on a finite
+realized training trace, where every stored accumulator is finite unless
+numerical overflow occurs. The propositions below should be read in that
+finite-trace sense.
+
+\paragraph{Proposition 1: impulse contraction.}
+For AdaGrad-OTA, define
+\begin{equation}
+    V_t=\sum_{\tau=1}^{t} x_\tau^\alpha,
+    \qquad
+    \eta_{t,i}^{\rm eff}=\frac{\eta}{V_t^{1/\alpha}+\varepsilon}.
+\end{equation}
+If round $t$ contains an impulsive coordinate with magnitude $x_t=R$, then
+\begin{equation}
+    \eta_{t,i}^{\rm eff}\leq \frac{\eta}{R+\varepsilon},
+    \qquad
+    \left|\eta\frac{z_t}{V_t^{1/\alpha}+\varepsilon}\right|\leq \eta.
+\end{equation}
+Thus the same observation that creates a large numerator also enlarges the
+denominator enough to cap the coordinate-wise normalized step. A fixed-step
+FedAvg-OTA update has no such feedback: its coordinate response to the same
+impulse has magnitude $\eta R$.
+
+\noindent\emph{Proof.}
+Since $V_t=V_{t-1}+R^\alpha\geq R^\alpha$, we have
+$V_t^{1/\alpha}\geq R$. Substituting this inequality into the effective
+learning rate gives the first bound, and multiplying by $R$ gives the
+normalized-step bound.
+
+For Adam-OTA, the bias-corrected second accumulator can be written as
+\begin{equation}
+    \hat V_t
+    = \sum_{\tau=1}^{t}
+    \frac{(1-\beta_2)\beta_2^{t-\tau}}{1-\beta_2^t}
+    x_\tau^\alpha .
+\end{equation}
+The current sample has weight
+$(1-\beta_2)/(1-\beta_2^t)\geq 1-\beta_2$. Therefore, after an impulse
+$x_t=R$,
+\begin{equation}
+    \frac{\eta}{\hat V_t^{1/\alpha}+\varepsilon}
+    \leq
+    \frac{\eta}{(1-\beta_2)^{1/\alpha}R+\varepsilon}.
+\end{equation}
+Adam-OTA keeps a finite memory rather than a monotone memory, so this bound
+contains the constant $(1-\beta_2)^{1/\alpha}$, but the same denominator
+feedback remains present.
+
+\paragraph{Proposition 2: tail-index step-size scaling.}
+For AdaGrad-OTA, suppose that along a finite trace the empirical
+$\alpha$-power average is bounded below by a positive constant,
+\begin{equation}
+    c_t=\frac{1}{t}\sum_{\tau=1}^{t}x_\tau^\alpha \geq c>0,
+    \qquad 1\leq t\leq T.
+\end{equation}
+Then each coordinate-wise effective learning rate satisfies
+\begin{equation}
+    \eta_{t,i}^{\rm eff}
+    \leq
+    \eta c^{-1/\alpha}t^{-1/\alpha},
+\end{equation}
+and its average over the first $T$ rounds obeys
+\begin{equation}
+    \frac{1}{T}\sum_{t=1}^{T}\eta_{t,i}^{\rm eff}
+    \leq
+    \eta c^{-1/\alpha}
+    \left(\frac{1}{T}+\frac{\alpha}{\alpha-1}T^{-1/\alpha}\right).
+\end{equation}
+
+\noindent\emph{Proof.}
+The denominator satisfies
+$V_t^{1/\alpha}=(t c_t)^{1/\alpha}\geq (tc)^{1/\alpha}$, so
+$\eta_{t,i}^{\rm eff}\leq\eta c^{-1/\alpha}t^{-1/\alpha}$. Averaging this
+bound and using
+$\sum_{t=1}^{T}t^{-1/\alpha}\leq
+1+\int_1^T u^{-1/\alpha}\,du
+\leq 1+\frac{\alpha}{\alpha-1}T^{1-1/\alpha}$
+gives the result.
+
+This proposition gives a direct tail-index interpretation. Smaller
+$\alpha$ produces the faster decay exponent $1/\alpha$, so heavy-tailed
+traces force stronger automatic damping. That damping improves stability
+after impulsive rounds, but it can also compress useful signal and slow
+late-stage optimization.
+
+\paragraph{One-dimensional interpretation.}
+The same mechanism can be visualized with the quadratic problem
 \begin{equation}
     f(w)=\frac{1}{2}(w-w^\star)^2.
 \end{equation}
@@ -129,46 +232,15 @@ For an AdaGrad-style update,
     \quad
     w_{t+1}=w_t-\eta\frac{\tilde{g}_t}{v_t^{1/\alpha}+\epsilon}.
 \end{equation}
-Whenever an impulsive noise sample makes $|\tilde{g}_t|$ large, it also makes
-$v_t$ larger. The next effective step size
+Whenever an impulsive noise sample makes $|\tilde{g}_t|$ large, it also
+makes $v_t$ larger. The next effective step size
 \begin{equation}
     \eta_t^{\mathrm{eff}} =
     \frac{\eta}{v_t^{1/\alpha}+\epsilon}
 \end{equation}
-therefore contracts automatically. A fixed-step FedAvg-style update has no
-such feedback and can be dominated by rare heavy-tailed samples. The same
-mechanism also explains a limitation: if $v_t$ grows too quickly, useful
-signal is compressed together with noise, which can slow training on harder
-tasks such as CIFAR-10.
-
-\paragraph{Long-run decay rate.}
-The one-dimensional picture also gives a simple bound on how
-aggressively the effective server learning rate decays. Because
-$v_t=v_{t-1}+|\tilde g_t|^\alpha$ is monotone non-decreasing, by Jensen,
-\begin{equation}
-    \mathbb{E}\bigl[v_t^{1/\alpha}\bigr]
-    \ge \bigl(\mathbb{E}[v_t]\bigr)^{1/\alpha}
-    = \bigl(t\cdot\mathbb{E}|\tilde g|^{\alpha}\bigr)^{1/\alpha}
-    = t^{1/\alpha}\,\bigl(\mathbb{E}|\tilde g|^{\alpha}\bigr)^{1/\alpha},
-\end{equation}
-so
-\begin{equation}
-    \mathbb{E}\bigl[\eta_t^{\mathrm{eff}}\bigr]
-    \le
-    \frac{\eta}
-    {t^{1/\alpha}\bigl(\mathbb{E}|\tilde g|^{\alpha}\bigr)^{1/\alpha}
-    + \epsilon}.
-\end{equation}
-The effective server learning rate therefore decays at least as
-$O(t^{-1/\alpha})$. For $\alpha=2$ (AWGN) this recovers the classical
-$O(t^{-1/2})$ AdaGrad decay; for $\alpha=1.3$ the decay accelerates to
-$O(t^{-0.77})$, which both stabilizes impulsive rounds and
-quantitatively explains why AdaGrad-OTA becomes conservative on
-long CIFAR-10 runs.
-
-The rigorous multi-dimensional non-convex analysis is given
-by~\cite{wang2024adaptive}; this section only provides an
-interpretable special case for the implemented simulator.
+therefore contracts automatically. This special case is not a replacement
+for the full theorem in \cite{wang2024adaptive}, but it explains why the
+implemented accumulator reacts strongly after impulsive rounds.
 
 \section{Implementation Modules}
 The codebase is organized around separable modules. The channel layer

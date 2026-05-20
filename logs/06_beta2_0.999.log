@@ -1,0 +1,110 @@
+/home/promissa/projects/st4001_project/.venv/lib/python3.13/site-packages/torchvision/datasets/cifar.py:83: VisibleDeprecationWarning: dtype(): align should be passed as Python or NumPy boolean but got `align=0`. Did you mean to pass a tuple to create a subarray type? (Deprecated NumPy 2.4)
+  entry = pickle.load(f, encoding="latin1")
+Device: cuda | Config: {'study': 'alpha', 'dataset': 'cifar10', 'model': 'resnet18', 'rounds': 50, 'num_clients': 100, 'local_epochs': 1, 'batch_size': 64, 'server_lr': 0.01, 'local_lr': 0.01, 'momentum': 0.9, 'beta2': 0.999, 'noise_scale': 0.05, 'alphas': [1.3, 2.0], 'mac_alpha': 1.3, 'mac_clip': 3.0, 'mac_clips': [0.0, 1.0, 2.0, 3.0, 5.0], 'mac_noise_scales': [0.05, 0.1, 0.2], 'use_mac': False, 'methods': ['adam_ota'], 'seeds': [42], 'parallel_seeds': False, 'non_iid': True, 'dir_conc': 0.1, 'log_every': 1, 'save_diagnostics': False, 'max_eval_loss': 1000000.0, 'out_dir': 'results/heavytail/beta2_0.999', 'amp': True, 'amp_dtype': 'bf16', 'channels_last': True, 'eval_batch_size': 1024, 'eval_every': 1, 'diagnostics_every': 0, 'fast_data': 'on', 'use_amp': True, 'use_channels_last': True, 'use_fast_data': True}
+AMP:       True (bf16) | channels_last=True
+Fast data: True (on) | eval_every=1 | diagnostics_every=0
+
+=== Heavy-tail ablation: alpha-stable tail index ===
+  alpha=1.3 seed=42  no-MAC adam_ota     round    1/50 loss=2.7966 acc=0.1000
+  alpha=1.3 seed=42  no-MAC adam_ota     round    2/50 loss=3.3047 acc=0.1000
+  alpha=1.3 seed=42  no-MAC adam_ota     round    3/50 loss=5.6832 acc=0.1000
+  alpha=1.3 seed=42  no-MAC adam_ota     round    4/50 loss=6.5847 acc=0.1000
+  alpha=1.3 seed=42  no-MAC adam_ota     round    5/50 loss=4.1589 acc=0.1248
+  alpha=1.3 seed=42  no-MAC adam_ota     round    6/50 loss=3.9553 acc=0.1171
+  alpha=1.3 seed=42  no-MAC adam_ota     round    7/50 loss=4.8528 acc=0.1029
+  alpha=1.3 seed=42  no-MAC adam_ota     round    8/50 loss=4.8927 acc=0.1093
+  alpha=1.3 seed=42  no-MAC adam_ota     round    9/50 loss=4.1153 acc=0.1384
+  alpha=1.3 seed=42  no-MAC adam_ota     round   10/50 loss=3.8408 acc=0.1316
+  alpha=1.3 seed=42  no-MAC adam_ota     round   11/50 loss=4.7652 acc=0.1007
+  alpha=1.3 seed=42  no-MAC adam_ota     round   12/50 loss=4.5790 acc=0.1025
+  alpha=1.3 seed=42  no-MAC adam_ota     round   13/50 loss=3.5928 acc=0.1120
+  alpha=1.3 seed=42  no-MAC adam_ota     round   14/50 loss=2.9840 acc=0.1471
+  alpha=1.3 seed=42  no-MAC adam_ota     round   15/50 loss=2.8104 acc=0.1532
+  alpha=1.3 seed=42  no-MAC adam_ota     round   16/50 loss=2.7232 acc=0.1710
+  alpha=1.3 seed=42  no-MAC adam_ota     round   17/50 loss=2.5584 acc=0.1786
+  alpha=1.3 seed=42  no-MAC adam_ota     round   18/50 loss=2.4819 acc=0.1846
+  alpha=1.3 seed=42  no-MAC adam_ota     round   19/50 loss=2.6239 acc=0.1667
+  alpha=1.3 seed=42  no-MAC adam_ota     round   20/50 loss=2.8774 acc=0.1453
+  alpha=1.3 seed=42  no-MAC adam_ota     round   21/50 loss=2.8668 acc=0.1534
+  alpha=1.3 seed=42  no-MAC adam_ota     round   22/50 loss=2.6623 acc=0.1842
+  alpha=1.3 seed=42  no-MAC adam_ota     round   23/50 loss=2.5154 acc=0.1993
+  alpha=1.3 seed=42  no-MAC adam_ota     round   24/50 loss=2.4425 acc=0.1976
+  alpha=1.3 seed=42  no-MAC adam_ota     round   25/50 loss=2.3999 acc=0.2051
+  alpha=1.3 seed=42  no-MAC adam_ota     round   26/50 loss=2.3433 acc=0.2122
+  alpha=1.3 seed=42  no-MAC adam_ota     round   27/50 loss=2.3466 acc=0.2165
+  alpha=1.3 seed=42  no-MAC adam_ota     round   28/50 loss=2.4001 acc=0.2064
+  alpha=1.3 seed=42  no-MAC adam_ota     round   29/50 loss=2.4500 acc=0.1922
+  alpha=1.3 seed=42  no-MAC adam_ota     round   30/50 loss=2.4939 acc=0.1783
+  alpha=1.3 seed=42  no-MAC adam_ota     round   31/50 loss=2.3961 acc=0.1891
+  alpha=1.3 seed=42  no-MAC adam_ota     round   32/50 loss=2.2697 acc=0.2118
+  alpha=1.3 seed=42  no-MAC adam_ota     round   33/50 loss=2.1660 acc=0.2216
+  alpha=1.3 seed=42  no-MAC adam_ota     round   34/50 loss=2.1384 acc=0.2317
+  alpha=1.3 seed=42  no-MAC adam_ota     round   35/50 loss=2.1447 acc=0.2303
+  alpha=1.3 seed=42  no-MAC adam_ota     round   36/50 loss=2.1389 acc=0.2248
+  alpha=1.3 seed=42  no-MAC adam_ota     round   37/50 loss=2.1204 acc=0.2282
+  alpha=1.3 seed=42  no-MAC adam_ota     round   38/50 loss=2.1071 acc=0.2301
+  alpha=1.3 seed=42  no-MAC adam_ota     round   39/50 loss=2.1266 acc=0.2259
+  alpha=1.3 seed=42  no-MAC adam_ota     round   40/50 loss=2.1367 acc=0.2205
+  alpha=1.3 seed=42  no-MAC adam_ota     round   41/50 loss=2.1838 acc=0.2202
+  alpha=1.3 seed=42  no-MAC adam_ota     round   42/50 loss=2.1619 acc=0.2274
+  alpha=1.3 seed=42  no-MAC adam_ota     round   43/50 loss=2.1287 acc=0.2301
+  alpha=1.3 seed=42  no-MAC adam_ota     round   44/50 loss=2.0934 acc=0.2393
+  alpha=1.3 seed=42  no-MAC adam_ota     round   45/50 loss=2.0735 acc=0.2386
+  alpha=1.3 seed=42  no-MAC adam_ota     round   46/50 loss=2.0979 acc=0.2322
+  alpha=1.3 seed=42  no-MAC adam_ota     round   47/50 loss=2.1577 acc=0.2214
+  alpha=1.3 seed=42  no-MAC adam_ota     round   48/50 loss=2.1612 acc=0.2194
+  alpha=1.3 seed=42  no-MAC adam_ota     round   49/50 loss=2.1266 acc=0.2320
+  alpha=1.3 seed=42  no-MAC adam_ota     round   50/50 loss=2.1099 acc=0.2411
+/home/promissa/projects/st4001_project/.venv/lib/python3.13/site-packages/torchvision/datasets/cifar.py:83: VisibleDeprecationWarning: dtype(): align should be passed as Python or NumPy boolean but got `align=0`. Did you mean to pass a tuple to create a subarray type? (Deprecated NumPy 2.4)
+  entry = pickle.load(f, encoding="latin1")
+  alpha=2.0 seed=42  no-MAC adam_ota     round    1/50 loss=2.8487 acc=0.1000
+  alpha=2.0 seed=42  no-MAC adam_ota     round    2/50 loss=2.9348 acc=0.1264
+  alpha=2.0 seed=42  no-MAC adam_ota     round    3/50 loss=4.2140 acc=0.1000
+  alpha=2.0 seed=42  no-MAC adam_ota     round    4/50 loss=5.9397 acc=0.1004
+  alpha=2.0 seed=42  no-MAC adam_ota     round    5/50 loss=4.3294 acc=0.1024
+  alpha=2.0 seed=42  no-MAC adam_ota     round    6/50 loss=4.3486 acc=0.1108
+  alpha=2.0 seed=42  no-MAC adam_ota     round    7/50 loss=4.1123 acc=0.1243
+  alpha=2.0 seed=42  no-MAC adam_ota     round    8/50 loss=3.6040 acc=0.1688
+  alpha=2.0 seed=42  no-MAC adam_ota     round    9/50 loss=3.0081 acc=0.1714
+  alpha=2.0 seed=42  no-MAC adam_ota     round   10/50 loss=2.8868 acc=0.1356
+  alpha=2.0 seed=42  no-MAC adam_ota     round   11/50 loss=3.4455 acc=0.1117
+  alpha=2.0 seed=42  no-MAC adam_ota     round   12/50 loss=3.6916 acc=0.1101
+  alpha=2.0 seed=42  no-MAC adam_ota     round   13/50 loss=3.1248 acc=0.1260
+  alpha=2.0 seed=42  no-MAC adam_ota     round   14/50 loss=2.4538 acc=0.2089
+  alpha=2.0 seed=42  no-MAC adam_ota     round   15/50 loss=2.2382 acc=0.2245
+  alpha=2.0 seed=42  no-MAC adam_ota     round   16/50 loss=2.2105 acc=0.2251
+  alpha=2.0 seed=42  no-MAC adam_ota     round   17/50 loss=2.2469 acc=0.2119
+  alpha=2.0 seed=42  no-MAC adam_ota     round   18/50 loss=2.2221 acc=0.2045
+  alpha=2.0 seed=42  no-MAC adam_ota     round   19/50 loss=2.2202 acc=0.2214
+  alpha=2.0 seed=42  no-MAC adam_ota     round   20/50 loss=2.3503 acc=0.2077
+  alpha=2.0 seed=42  no-MAC adam_ota     round   21/50 loss=2.3867 acc=0.1889
+  alpha=2.0 seed=42  no-MAC adam_ota     round   22/50 loss=2.2269 acc=0.2199
+  alpha=2.0 seed=42  no-MAC adam_ota     round   23/50 loss=2.0709 acc=0.2578
+  alpha=2.0 seed=42  no-MAC adam_ota     round   24/50 loss=2.0048 acc=0.2638
+  alpha=2.0 seed=42  no-MAC adam_ota     round   25/50 loss=2.0044 acc=0.2710
+  alpha=2.0 seed=42  no-MAC adam_ota     round   26/50 loss=1.9911 acc=0.2686
+  alpha=2.0 seed=42  no-MAC adam_ota     round   27/50 loss=1.9520 acc=0.2804
+  alpha=2.0 seed=42  no-MAC adam_ota     round   28/50 loss=1.9018 acc=0.3000
+  alpha=2.0 seed=42  no-MAC adam_ota     round   29/50 loss=1.9055 acc=0.3001
+  alpha=2.0 seed=42  no-MAC adam_ota     round   30/50 loss=1.9320 acc=0.3005
+  alpha=2.0 seed=42  no-MAC adam_ota     round   31/50 loss=1.9170 acc=0.3032
+  alpha=2.0 seed=42  no-MAC adam_ota     round   32/50 loss=1.8433 acc=0.3168
+  alpha=2.0 seed=42  no-MAC adam_ota     round   33/50 loss=1.7911 acc=0.3193
+  alpha=2.0 seed=42  no-MAC adam_ota     round   34/50 loss=1.8096 acc=0.3067
+  alpha=2.0 seed=42  no-MAC adam_ota     round   35/50 loss=1.8403 acc=0.3063
+  alpha=2.0 seed=42  no-MAC adam_ota     round   36/50 loss=1.8567 acc=0.3128
+  alpha=2.0 seed=42  no-MAC adam_ota     round   37/50 loss=1.8384 acc=0.3241
+  alpha=2.0 seed=42  no-MAC adam_ota     round   38/50 loss=1.8253 acc=0.3330
+  alpha=2.0 seed=42  no-MAC adam_ota     round   39/50 loss=1.7888 acc=0.3433
+  alpha=2.0 seed=42  no-MAC adam_ota     round   40/50 loss=1.7824 acc=0.3433
+  alpha=2.0 seed=42  no-MAC adam_ota     round   41/50 loss=1.7784 acc=0.3452
+  alpha=2.0 seed=42  no-MAC adam_ota     round   42/50 loss=1.7986 acc=0.3401
+  alpha=2.0 seed=42  no-MAC adam_ota     round   43/50 loss=1.7923 acc=0.3387
+  alpha=2.0 seed=42  no-MAC adam_ota     round   44/50 loss=1.7769 acc=0.3333
+  alpha=2.0 seed=42  no-MAC adam_ota     round   45/50 loss=1.7477 acc=0.3373
+  alpha=2.0 seed=42  no-MAC adam_ota     round   46/50 loss=1.7500 acc=0.3438
+  alpha=2.0 seed=42  no-MAC adam_ota     round   47/50 loss=1.7803 acc=0.3412
+  alpha=2.0 seed=42  no-MAC adam_ota     round   48/50 loss=1.7976 acc=0.3385
+  alpha=2.0 seed=42  no-MAC adam_ota     round   49/50 loss=1.7875 acc=0.3394
+  alpha=2.0 seed=42  no-MAC adam_ota     round   50/50 loss=1.7538 acc=0.3462
+Saved: results/heavytail/beta2_0.999/alpha_ablation_cifar10_resnet18.json

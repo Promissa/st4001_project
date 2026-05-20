@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023/Debian) (preloaded format=xelatex 2026.5.7)  18 MAY 2026 04:30
+This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023/Debian) (preloaded format=xelatex 2026.5.7)  20 MAY 2026 17:38
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -563,16 +563,11 @@ Overfull \hbox (78.46684pt too wide) in paragraph at lines 22--23
 ]
 \openout2 = `data/abstract.aux'.
 
- (./data/abstract.tex
-Overfull \hbox (0.99042pt too wide) in paragraph at lines 24--38
-\TU/TeXGyreTermes(0)/m/n/12 (FedAvgM-OTA): a 25–40 percentage point margin in favor of fractional second-moment
- []
-
-) [4
+ (./data/abstract.tex [4
 
 
 
-] [5] (./main.toc [6
+]) [5] (./main.toc [6
 
 
 
@@ -588,17 +583,12 @@ Chapter 1.
 [2
 
 
-]
-Overfull \hbox (8.86993pt too wide) in paragraph at lines 59--66
-\TU/TeXGyreTermes(0)/m/n/12 rounds, $\OML/cmm/m/it/12 ^^M \OT1/cmr/m/n/12 = 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 05$\TU/TeXGyreTermes(0)/m/n/12 , three seeds), AdaGrad-OTA and Adam-OTA outperform FedAvg-
- []
-
-
-Overfull \hbox (18.58542pt too wide) in paragraph at lines 81--86
+] [3]
+Overfull \hbox (18.58542pt too wide) in paragraph at lines 85--90
 \TU/TeXGyreTermes(0)/m/n/12 channel oracle based on the Chambers–Mallows–Stuck sampler, MAC pre-processing,
  []
 
-[3]) [4]
+) [4]
 \openout2 = `data/chap2.aux'.
 
  (./data/chap2.tex
@@ -639,38 +629,28 @@ Underfull \hbox (badness 10000) in paragraph at lines 112--112
  []
 
 
-Underfull \hbox (badness 1546) in paragraph at lines 115--117
-[]|\TU/TeXGyreTermes(0)/m/n/12 One-dimensional toy intu-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 117--118
+Underfull \hbox (badness 10000) in paragraph at lines 118--119
 []|\TU/TeXGyreTermes(0)/m/n/12 Per-method learning-rate
  []
 
 
-Underfull \hbox (badness 1755) in paragraph at lines 117--118
+Underfull \hbox (badness 1755) in paragraph at lines 118--119
 \TU/TeXGyreTermes(0)/m/n/12 tuning across many seeds
  []
 
 
-Underfull \hbox (badness 2856) in paragraph at lines 118--120
+Underfull \hbox (badness 2856) in paragraph at lines 119--121
 []|\TU/TeXGyreTermes(0)/m/n/12 Three seeds, fixed server
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 122--123
+Underfull \hbox (badness 10000) in paragraph at lines 123--124
 []|\TU/TeXGyreTermes(0)/m/n/12 Algorithmic contribution
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 123--125
-[]|\TU/TeXGyreTermes(0)/m/n/12 Reproducible simulator
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 123--125
-\TU/TeXGyreTermes(0)/m/n/12 and empirical robustness
+Underfull \hbox (badness 10000) in paragraph at lines 124--126
+[]|\TU/TeXGyreTermes(0)/m/n/12 Reproducible simulator,
  []
 
 ) [7]
@@ -679,7 +659,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 123--125
  (./data/chap3.tex
 Chapter 3.
 
-Overfull \hbox (0.56943pt too wide) in paragraph at lines 34--39
+Overfull \hbox (0.56943pt too wide) in paragraph at lines 37--42
 []\TU/TeXGyreTermes(0)/m/n/12 The simulator includes Median Anchored Clipping (MAC) as a robust pre-processing
  []
 
@@ -689,76 +669,80 @@ Overfull \hbox (0.56943pt too wide) in paragraph at lines 34--39
 
 
 ]
-Overfull \hbox (18.30157pt too wide) in paragraph at lines 70--72
+Overfull \hbox (18.30157pt too wide) in paragraph at lines 73--75
 []\TU/TeXGyreTermes(0)/m/n/12 AdaGrad-OTA maintains a smoothed update direction $\OML/cmm/m/it/12 s[]$ \TU/TeXGyreTermes(0)/m/n/12 and an accumulated coordinate-
  []
 
-[9] [10] [11]) [12]
+[9] [10] [11] [12] [13]) [14]
 \openout2 = `data/chap4.aux'.
 
  (./data/chap4.tex
 Chapter 4.
-[13
+[15
 
 
 
 
 ]
-Underfull \hbox (badness 10000) in paragraph at lines 84--85
-[]|\TU/TeXGyreTermes(0)/m/n/12 FedAvg-OTA, FedAvgM-OTA,
+Underfull \hbox (badness 10000) in paragraph at lines 86--87
+[]|\TU/TeXGyreTermes(0)/m/n/12 FedAvg-OTA,FedAvgM-OTA,
  []
 
-[14]
-Overfull \hbox (4.2801pt too wide) in paragraph at lines 118--125
+
+Overfull \hbox (44.60121pt too wide) in paragraph at lines 89--91
+\OML/cmm/m/it/12 ^^Q \OMS/cmsy/m/n/12 2$$f\OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 0001\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 0003\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 001\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 003\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 01\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 03\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 0\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 1\OMS/cmsy/m/n/12 g$| 
+ []
+
+[16]
+Overfull \hbox (4.2801pt too wide) in paragraph at lines 123--130
 \TU/TeXGyreTermes(0)/m/n/12 server-side normalization. FedAvg-OTA reaches 67.85% final accuracy, while FedAvgM-
  []
 
 
-Overfull \hbox (18.5611pt too wide) in paragraph at lines 144--156
+Overfull \hbox (18.5611pt too wide) in paragraph at lines 149--161
 \TU/TeXGyreTermes(0)/m/n/12 strongest method in the controlled 200-round run, reaching 63.94% final accuracy. AdaGrad-
  []
 
-[15]
+[17]
 File: ../results/figures/cifar10_resnet18_alpha2.0_N100_curves.png Graphic file (type bmp)
 <../results/figures/cifar10_resnet18_alpha2.0_N100_curves.png>
- [16] (./data/generated/alpha_ablation_table.tex)
+ [18] (./data/generated/alpha_ablation_table.tex)
 File: ../results/figures/alpha_ablation_cifar10_resnet18_plot.png Graphic file (type bmp)
 <../results/figures/alpha_ablation_cifar10_resnet18_plot.png>
-
-
-LaTeX Warning: Reference `sec:future-work' on page 17 undefined on input line 266.
-
-[17] [18] (./data/generated/mac_compare_table.tex)
+ [19] [20] (./data/generated/lr_sweep_table.tex)
+File: ../results/figures/lr_sweep_cifar10_resnet18_alpha1.3_plot.png Graphic file (type bmp)
+<../results/figures/lr_sweep_cifar10_resnet18_alpha1.3_plot.png>
+ [21] [22] (./data/generated/mac_compare_table.tex)
 File: ../results/figures/mac_compare_cifar10_resnet18_alpha1.3_plot.png Graphic file (type bmp)
 <../results/figures/mac_compare_cifar10_resnet18_alpha1.3_plot.png>
- [19] [20]
+ [23]
 File: ../results/figures/ablation_clients_cifar10_resnet18_plot.png Graphic file (type bmp)
 <../results/figures/ablation_clients_cifar10_resnet18_plot.png>
- [21] [22]) [23]
+ [24] [25]) [26]
 \openout2 = `data/chap5.aux'.
 
  (./data/chap5.tex
 Chapter 5.
 
-Overfull \hbox (5.52043pt too wide) in paragraph at lines 4--13
-\OMS/cmsy/m/n/12 f\OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 1\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 3\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 5\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 7\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 9\OMS/cmsy/m/n/12 g$\TU/TeXGyreTermes(0)/m/n/12 , AdaGrad-OTA (49.52–51.75%) and Adam-OTA (42.88–44.82%)
+Overfull \hbox (3.28444pt too wide) in paragraph at lines 4--15
+\OMS/cmsy/m/n/12 f\OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 1\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 3\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 5\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 7\OML/cmm/m/it/12 ; \OT1/cmr/m/n/12 1\OML/cmm/m/it/12 :\OT1/cmr/m/n/12 9\OMS/cmsy/m/n/12 g$\TU/TeXGyreTermes(0)/m/n/12 , AdaGrad-OTA and Adam-OTA complete all runs, while FedAvg-
  []
 
-) [24
+[27
 
 
 
 
-]
+]) [28]
 \openout2 = `data/ref-bib.aux'.
 
- (./data/ref-bib.tex (./main.bbl [25
+ (./data/ref-bib.tex (./main.bbl [29
 
 
 
 
 
-])) [26]
+])) [30]
 \openout2 = `data/appendix.aux'.
 
  (./data/appendix.tex
@@ -776,7 +760,7 @@ Overfull \hbox (131.43044pt too wide) in paragraph at lines 40--61
  [] 
  []
 
-[27
+[31
 
 
 
@@ -785,10 +769,10 @@ Overfull \hbox (258.2931pt too wide) in paragraph at lines 70--84
  [] 
  []
 
-) [28] [29]
+) [32]
 \openout2 = `data/biography.aux'.
 
- (./data/biography.tex) [30
+ (./data/biography.tex) [33
 
 
 
@@ -802,19 +786,16 @@ L3 programming layer <2024-01-22>
 LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 0.5pt have occurred.
 
-
-LaTeX Warning: There were undefined references.
-
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: EDC02690612798D15AE9849904F2F606;5739.
+(rerunfilecheck)             Checksum: 7E9A8612A2A62125F2E4289DABEC3C5A;6076.
  ) 
 Here is how much of TeX's memory you used:
- 15553 strings out of 476443
- 297495 string characters out of 5793963
- 1938627 words of memory out of 5000000
- 37201 multiletter control sequences out of 15000+600000
+ 15575 strings out of 476443
+ 298463 string characters out of 5793963
+ 1939627 words of memory out of 5000000
+ 37219 multiletter control sequences out of 15000+600000
  569718 words of font info for 114 fonts, out of 8000000 for 9000
  264 hyphenation exceptions out of 8191
  94i,14n,107p,802b,475s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on main.pdf (37 pages).
+Output written on main.pdf (40 pages).

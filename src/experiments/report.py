@@ -32,6 +32,21 @@ def _fmt_acc(mean: float | None, std: float | None) -> str:
     return f"{mean * 100:.2f}\\% $\\pm$ {std * 100:.2f}\\%"
 
 
+def _fmt_block(block: dict | None, metric: str = "final_acc") -> str:
+    if not block:
+        return "--"
+    mean, std = _mean_std(block, metric)
+    text = _fmt_acc(mean, std)
+    summary = block.get("summary", {})
+    ok_runs = summary.get("ok_runs")
+    num_runs = summary.get("num_runs")
+    if ok_runs is not None and num_runs is not None and ok_runs != num_runs:
+        if mean is None:
+            return f"-- ({ok_runs}/{num_runs} ok)"
+        return f"{text} ({ok_runs}/{num_runs} ok)"
+    return text
+
+
 def write_alpha_table(path: str, out_dir: Path) -> Path:
     with open(path) as f:
         data = json.load(f)
@@ -55,7 +70,7 @@ def write_alpha_table(path: str, out_dir: Path) -> Path:
             row = [f"{alpha:g}"]
             for method in methods:
                 block = results[f"{alpha:g}"].get(method)
-                row.append(_fmt_acc(*_mean_std(block)) if block else "--")
+                row.append(_fmt_block(block))
             f.write("        " + " & ".join(row) + " \\\\\n")
         f.write("        \\hline\n")
         f.write("    \\end{tabular}\n")
@@ -82,8 +97,8 @@ def write_mac_table(path: str, out_dir: Path) -> Path:
         f.write("        Method & No MAC & MAC \\\\\n")
         f.write("        \\hline\n")
         for method in methods:
-            no_mac = _fmt_acc(*_mean_std(results["no_mac"][method]))
-            mac = _fmt_acc(*_mean_std(results["mac"][method]))
+            no_mac = _fmt_block(results["no_mac"].get(method))
+            mac = _fmt_block(results["mac"].get(method))
             f.write(f"        {METHOD_LABELS[method]} & {no_mac} & {mac} \\\\\n")
         f.write("        \\hline\n")
         f.write("    \\end{tabular}\n")
@@ -117,7 +132,7 @@ def write_lr_sweep_table(path: str, out_dir: Path) -> Path:
             row = [f"{lr:g}"]
             for method in methods:
                 block = results[f"{lr:g}"].get(method)
-                row.append(_fmt_acc(*_mean_std(block)) if block else "--")
+                row.append(_fmt_block(block))
             f.write("        " + " & ".join(row) + " \\\\\n")
         f.write("        \\hline\n")
         f.write("    \\end{tabular}\n")

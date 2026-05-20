@@ -149,6 +149,25 @@ def _summary(runs: list[dict]) -> dict:
     }
 
 
+def _diagnostic_suffix(diag: dict | None) -> str:
+    if not diag:
+        return ""
+    fields = []
+    for key in (
+        "clean_grad_max_abs",
+        "noise_max_abs_normalized",
+        "noise_to_clean_norm",
+        "agg_max_abs",
+        "update_norm",
+        "update_to_agg_norm",
+        "v_max_abs",
+    ):
+        value = diag.get(key)
+        if isinstance(value, (int, float)) and math.isfinite(value):
+            fields.append(f"{key}={value:.4g}")
+    return (" " + " ".join(fields)) if fields else ""
+
+
 def _same_float(left: float | None, right: float | None, tol: float = 1e-12) -> bool:
     if left is None or right is None:
         return left is right
@@ -190,6 +209,7 @@ def _payload_matches_current_config(payload: dict, args) -> bool:
         "channels_last",
         "use_amp",
         "use_channels_last",
+        "max_eval_loss",
     ]
     float_keys = [
         "server_lr",
@@ -283,13 +303,15 @@ def run_trial(
     status = "ok"
     failed_round = None
     completed_round = 0
+    failure_diagnostics = None
 
     for rnd in range(1, args.rounds + 1):
+        will_evaluate = should_evaluate(rnd, args.rounds, args)
         need_diag = should_collect_diagnostics(
             rnd,
             args,
             save_diagnostics=args.save_diagnostics,
-        )
+        ) or (args.max_eval_loss > 0 and will_evaluate)
         diag = run_round(
             model,
             client_loaders,
@@ -313,10 +335,17 @@ def run_trial(
         if diag is not None and diag["status"] != "ok":
             status = diag["status"]
             failed_round = rnd
+            failure_diagnostics = {"round": rnd, **diag}
+            print(
+                f"  alpha={alpha:<3} seed={seed:<3} "
+                f"{'MAC' if use_mac else 'no-MAC':<6} {method:<12} "
+                f"round {rnd:4d}/{args.rounds} status={status}"
+                f"{_diagnostic_suffix(diag)}",
+                flush=True,
+            )
             break
 
-        evaluated = should_evaluate(rnd, args.rounds, args)
-        if evaluated:
+        if will_evaluate:
             loss, acc = evaluate(
                 model,
                 test_loader,
@@ -328,15 +357,39 @@ def run_trial(
             if not math.isfinite(loss) or not math.isfinite(acc):
                 status = "nonfinite_eval"
                 failed_round = rnd
+                failure_diagnostics = {"round": rnd, **diag} if diag is not None else None
+                print(
+                    f"  alpha={alpha:<3} seed={seed:<3} "
+                    f"{'MAC' if use_mac else 'no-MAC':<6} {method:<12} "
+                    f"round {rnd:4d}/{args.rounds} status={status}"
+                    f"{_diagnostic_suffix(diag)}",
+                    flush=True,
+                )
                 break
 
-            loss_hist.append(float(loss))
-            acc_hist.append(float(acc))
+            loss_value = float(loss)
+            acc_value = float(acc)
+            loss_hist.append(loss_value)
+            acc_hist.append(acc_value)
             eval_rounds.append(rnd)
+            if args.max_eval_loss > 0 and loss_value > args.max_eval_loss:
+                status = "diverged_eval"
+                failed_round = rnd
+                failure_diagnostics = {"round": rnd, **diag} if diag is not None else None
+                print(
+                    f"  alpha={alpha:<3} seed={seed:<3} "
+                    f"{'MAC' if use_mac else 'no-MAC':<6} {method:<12} "
+                    f"round {rnd:4d}/{args.rounds} status={status} "
+                    f"loss={loss_value:.4g} acc={acc_value:.4f} "
+                    f"threshold={args.max_eval_loss:g}"
+                    f"{_diagnostic_suffix(diag)}",
+                    flush=True,
+                )
+                break
 
         if rnd % args.log_every == 0 or rnd == 1:
             mac_label = "MAC" if use_mac else "no-MAC"
-            if evaluated:
+            if will_evaluate:
                 print(
                     f"  alpha={alpha:<3} seed={seed:<3} {mac_label:<6} "
                     f"{method:<12} round {rnd:4d}/{args.rounds} "
@@ -371,7 +424,38 @@ def run_trial(
     }
     if args.save_diagnostics:
         result["diagnostics"] = diagnostics
+    if failure_diagnostics is not None:
+        result["failure_diagnostics"] = failure_diagnostics
     return result
+
+
+def _run_seed_trials(
+    method: str,
+    alpha: float,
+    seeds: list[int],
+    use_mac: bool,
+    args,
+    device: torch.device,
+) -> list[dict]:
+    """Run seed trials deterministically by default.
+
+    Each trial resets Python, NumPy, and torch global RNG state. Running seeds
+    in threads therefore makes trials interfere with one another and is also
+    a poor fit for a single GPU. Keep threading as an explicit opt-in for
+    users who accept that tradeoff.
+    """
+    if args.parallel_seeds and len(seeds) > 1:
+        with ThreadPoolExecutor(max_workers=len(seeds)) as executor:
+            futures = [
+                executor.submit(run_trial, method, alpha, seed, use_mac, args, device)
+                for seed in seeds
+            ]
+            return [future.result() for future in futures]
+
+    return [
+        run_trial(method, alpha, seed, use_mac, args, device)
+        for seed in seeds
+    ]
 
 
 def run_alpha_ablation(args, device: torch.device) -> dict:
@@ -381,16 +465,7 @@ def run_alpha_ablation(args, device: torch.device) -> dict:
         alpha_key = f"{alpha:g}"
         results[alpha_key] = {}
         for method in args.methods:
-            seeds = args.seeds
-            if len(seeds) > 1:
-                with ThreadPoolExecutor(max_workers=len(seeds)) as executor:
-                    futures = [
-                        executor.submit(run_trial, method, alpha, seed, False, args, device)
-                        for seed in seeds
-                    ]
-                    runs = [f.result() for f in futures]
-            else:
-                runs = [run_trial(method, alpha, seeds[0], False, args, device)]
+            runs = _run_seed_trials(method, alpha, args.seeds, False, args, device)
             results[alpha_key][method] = {
                 "runs": runs,
                 "summary": _summary(runs),
@@ -434,20 +509,14 @@ def run_mac_sweep(args, device: torch.device) -> dict:
                 results[gamma_key][k_key] = {}
                 for method in args.methods:
                     print(f"  γ={gamma_key:<5} k={k_key:<4} method={method}", flush=True)
-                    seeds = args.seeds
-                    if len(seeds) > 1:
-                        with ThreadPoolExecutor(max_workers=len(seeds)) as executor:
-                            futures = [
-                                executor.submit(
-                                    run_trial, method, args.mac_alpha, seed,
-                                    use_mac, args, device,
-                                )
-                                for seed in seeds
-                            ]
-                            runs = [f.result() for f in futures]
-                    else:
-                        runs = [run_trial(method, args.mac_alpha, seeds[0],
-                                          use_mac, args, device)]
+                    runs = _run_seed_trials(
+                        method,
+                        args.mac_alpha,
+                        args.seeds,
+                        use_mac,
+                        args,
+                        device,
+                    )
                     results[gamma_key][k_key][method] = {
                         "runs": runs,
                         "summary": _summary(runs),
@@ -485,15 +554,14 @@ def run_mac_compare(args, device: torch.device) -> dict:
                     seeds_to_run.append(seed)
 
             if seeds_to_run:
-                if len(seeds_to_run) > 1:
-                    with ThreadPoolExecutor(max_workers=len(seeds_to_run)) as executor:
-                        futures = [
-                            executor.submit(run_trial, method, args.mac_alpha, seed, use_mac, args, device)
-                            for seed in seeds_to_run
-                        ]
-                        trial_results = [f.result() for f in futures]
-                else:
-                    trial_results = [run_trial(method, args.mac_alpha, seeds_to_run[0], use_mac, args, device)]
+                trial_results = _run_seed_trials(
+                    method,
+                    args.mac_alpha,
+                    seeds_to_run,
+                    use_mac,
+                    args,
+                    device,
+                )
                 runs.extend(trial_results)
 
             method_result = {
@@ -551,10 +619,14 @@ def parse_args():
     p.add_argument("--seeds", type=_parse_int_list,
                    default=DEFAULT_SEEDS,
                    help="Comma-separated seeds")
+    p.add_argument("--parallel_seeds", action="store_true", default=False,
+                   help="Run seeds concurrently; off by default because each trial resets global RNG state.")
     p.add_argument("--non_iid", action="store_true", default=True)
     p.add_argument("--dir_conc", type=float, default=0.1)
     p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--save_diagnostics", action="store_true", default=False)
+    p.add_argument("--max_eval_loss", type=float, default=1e6,
+                   help="Stop a run as diverged when finite eval loss exceeds this value. Set <=0 to disable.")
     p.add_argument("--out_dir", type=str, default="results/heavytail")
     add_accelerator_args(p)
     return p.parse_args()

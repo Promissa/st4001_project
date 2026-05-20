@@ -62,7 +62,8 @@ class AdaGradOTA:
 
         Args:
             agg_grads: OTA-aggregated gradients [g_t], one tensor per parameter.
-                       These are already normalized by N (i.e., g_t = oracle_output / N).
+                       The federated loop has already applied the required
+                       experiment-specific normalization.
         """
         for p, g, delta, v in zip(self.params, agg_grads, self.Delta, self.v):
             g = g.to(p.device)

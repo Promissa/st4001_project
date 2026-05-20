@@ -16,26 +16,31 @@
 \contentsline {section}{\numberline {3.4}AdaGrad-OTA}{10}{section.3.4}%
 \contentsline {section}{\numberline {3.5}Adam-OTA}{10}{section.3.5}%
 \contentsline {paragraph}{Implementation note: $\varepsilon $.}{11}{paragraph*.3}%
-\contentsline {section}{\numberline {3.6}One-Dimensional Intuition}{11}{section.3.6}%
-\contentsline {paragraph}{Long-run decay rate.}{12}{paragraph*.4}%
-\contentsline {section}{\numberline {3.7}Implementation Modules}{12}{section.3.7}%
-\contentsline {chapter}{\numberline {4}Experiments and Results}{13}{chapter.4}%
-\contentsline {section}{\numberline {4.1}Data}{13}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Experiment Configuration}{13}{section.4.2}%
-\contentsline {section}{\numberline {4.3}Evaluation Metrics}{14}{section.4.3}%
-\contentsline {section}{\numberline {4.4}Main Method Comparison}{15}{section.4.4}%
-\contentsline {section}{\numberline {4.5}Alpha-Stable Tail-Index Ablation}{17}{section.4.5}%
-\contentsline {section}{\numberline {4.6}MAC Robust Pre-Processing}{19}{section.4.6}%
-\contentsline {section}{\numberline {4.7}Client-Count Ablation}{21}{section.4.7}%
-\contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{21}{paragraph*.16}%
-\contentsline {section}{\numberline {4.8}Discussion}{22}{section.4.8}%
-\contentsline {subsection}{\numberline {4.8.1}Findings}{22}{subsection.4.8.1}%
-\contentsline {subsection}{\numberline {4.8.2}Failures and Negative Results}{23}{subsection.4.8.2}%
-\contentsline {subsection}{\numberline {4.8.3}Threats to Validity}{23}{subsection.4.8.3}%
-\contentsline {chapter}{\numberline {5}Conclusion and Future Work}{24}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Conclusion}{24}{section.5.1}%
-\contentsline {section}{\numberline {5.2}Limitations}{24}{section.5.2}%
-\contentsline {chapter}{References}{25}{section.5.2}%
-\contentsline {chapter}{Appendix}{27}{chapter*.17}%
-\contentsline {chapter}{Author's Biography}{30}{chapter*.17}%
+\contentsline {section}{\numberline {3.6}Finite-Trace Stability Analysis}{11}{section.3.6}%
+\contentsline {paragraph}{Moment caveat.}{11}{paragraph*.4}%
+\contentsline {paragraph}{Proposition 1: impulse contraction.}{11}{paragraph*.5}%
+\contentsline {paragraph}{Proposition 2: tail-index step-size scaling.}{12}{paragraph*.6}%
+\contentsline {paragraph}{One-dimensional interpretation.}{13}{paragraph*.7}%
+\contentsline {section}{\numberline {3.7}Implementation Modules}{14}{section.3.7}%
+\contentsline {chapter}{\numberline {4}Experiments and Results}{15}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Data}{15}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Experiment Configuration}{15}{section.4.2}%
+\contentsline {section}{\numberline {4.3}Evaluation Metrics}{16}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Main Method Comparison}{17}{section.4.4}%
+\contentsline {section}{\numberline {4.5}Alpha-Stable Tail-Index Ablation}{19}{section.4.5}%
+\contentsline {section}{\numberline {4.6}Server Learning-Rate Sweep}{21}{section.4.6}%
+\contentsline {section}{\numberline {4.7}MAC Robust Pre-Processing}{22}{section.4.7}%
+\contentsline {section}{\numberline {4.8}Client-Count Ablation}{24}{section.4.8}%
+\contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{25}{paragraph*.21}%
+\contentsline {section}{\numberline {4.9}Discussion}{25}{section.4.9}%
+\contentsline {subsection}{\numberline {4.9.1}Findings}{25}{subsection.4.9.1}%
+\contentsline {subsection}{\numberline {4.9.2}Failures and Negative Results}{26}{subsection.4.9.2}%
+\contentsline {subsection}{\numberline {4.9.3}Threats to Validity}{26}{subsection.4.9.3}%
+\contentsline {chapter}{\numberline {5}Conclusion and Future Work}{27}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Conclusion}{27}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Limitations}{27}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Future Work}{28}{section.5.3}%
+\contentsline {chapter}{References}{29}{section.5.3}%
+\contentsline {chapter}{Appendix}{31}{chapter*.22}%
+\contentsline {chapter}{Author's Biography}{33}{chapter*.22}%
 \contentsfinish 

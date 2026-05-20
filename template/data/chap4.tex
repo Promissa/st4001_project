@@ -71,6 +71,8 @@ Table \ref{tab:config-ablation} summarizes the revised CIFAR-10 heavy-tail
 ablation configuration. The tail-index ablation varies $\alpha$ while fixing
 $\gamma=0.05$. The MAC comparison uses the same heavy-tailed channel with
 $\alpha=1.3$ and compares training with and without robust pre-processing.
+The learning-rate sweep holds the same $\alpha=1.3$ channel fixed and varies
+the server learning rate for AdaGrad-OTA and Adam-OTA.
 
 \begin{table}[!htbp]
     \centering
@@ -81,9 +83,11 @@ $\alpha=1.3$ and compares training with and without robust pre-processing.
         Item & Value \\
         \hline
         Dataset / model & CIFAR-10 / ResNet-18 \\
-        Optimizers in alpha study & FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, Adam-OTA \\
+        Optimizers in alpha study & FedAvg-OTA,\,FedAvgM-OTA, AdaGrad-OTA, Adam-OTA \\
         Alpha values & 1.1, 1.3, 1.5, 1.7, 1.9, 2.0 \\
         MAC comparison & no MAC vs MAC, $k=3$ \\
+        Learning-rate sweep & AdaGrad-OTA / Adam-OTA at $\alpha=1.3$,
+        $\eta\in$$\{0.0001,0.0003,0.001,0.003,0.01,0.03,0.1\}$ \\
         Communication rounds & 100 \\
         Local epochs $E$ & 1 \\
         Batch size & 64 \\
@@ -108,11 +112,12 @@ the state of the trained model at the end of the fixed communication budget,
 while the best value helps reveal short-lived convergence peaks.
 
 For the alpha ablation, the reported metric is final test accuracy under each
-tail index $\alpha$. For the MAC comparison, the reported metric is final
-test accuracy with and without clipping. Multi-seed results are reported as
-mean $\pm$ standard deviation. All revised heavy-tail values are generated
-from the JSON files under \path{results/heavytail/} rather than copied from a
-single run.
+tail index $\alpha$. For the learning-rate sweep, the reported metric is final
+test accuracy for each server learning rate. For the MAC comparison, the
+reported metric is final test accuracy with and without clipping. Multi-seed
+results are reported as mean $\pm$ standard deviation. All revised heavy-tail
+values are generated from the JSON files under \path{results/heavytail/}
+rather than copied from a single run.
 
 \section{Main Method Comparison}
 The MNIST comparison in Table \ref{tab:mnist-results} is used as a sanity
@@ -203,9 +208,10 @@ only varying the AWGN scale. The endpoint $\alpha=2$ is Gaussian AWGN, while
 smaller values of $\alpha$ produce heavier-tailed impulsive interference.
 This is the setting where adaptive normalization is most meaningful: a
 server method must handle rare but very large aggregate perturbations.
-All configurations in this table complete the full 100 communication rounds
-for all three seeds without non-finite model values, so the comparison is not
-affected by early termination.
+The adaptive methods complete the full 100 communication rounds for all three
+seeds. In contrast, FedAvg-OTA and FedAvgM-OTA often diverge under the
+heaviest-tailed settings; the generated table therefore reports the number of
+successful seeds rather than silently averaging failed runs.
 
 \IfFileExists{data/generated/alpha_ablation_table.tex}{
     \input{data/generated/alpha_ablation_table}
@@ -239,34 +245,84 @@ affected by early termination.
     \label{fig:alpha-ablation}
 \end{figure}
 
-Table \ref{tab:alpha-ablation} shows a clear separation between methods, but
-not a simple monotonic degradation with smaller $\alpha$. FedAvg-OTA stays
-near random guessing at about 11.9\% final accuracy across the full sweep.
-FedAvgM-OTA is more stable but remains around 20.5--20.7\%. In contrast, the
-adaptive methods are substantially stronger under the 100-round non-IID
-CIFAR-10 setting. AdaGrad-OTA reaches 49.52--51.75\% for $\alpha<2$, compared
-with 43.88\% at the AWGN endpoint. Adam-OTA reaches 42.88--44.82\% for
-$\alpha<2$, compared with 39.89\% at $\alpha=2$.
+Table \ref{tab:alpha-ablation} shows a clear stability separation between
+methods. FedAvg-OTA and FedAvgM-OTA produce no successful runs for
+$\alpha\leq1.7$ under the finite-value guard, and only one of three seeds
+completes at $\alpha=1.9$. At the Gaussian endpoint $\alpha=2$, both
+baselines complete all seeds and reach 38.53\% and 41.96\% mean final
+accuracy, respectively. In contrast, both adaptive methods complete all seeds
+for every tested $\alpha$. AdaGrad-OTA improves from 30.22\% at
+$\alpha=1.1$ to 41.82\% at $\alpha=1.9$ and 42.25\% at $\alpha=2$.
+Adam-OTA improves from 20.69\% at $\alpha=1.1$ to 37.98\% at
+$\alpha=1.9$ and 38.16\% at $\alpha=2$.
 
-The result therefore supports a narrower claim: server-side second-moment
-normalization is much more effective than plain FedAvg or FedAvgM-OTA in the
-implemented heavy-tail experiment. However, it does not reproduce the
-stronger qualitative pattern that smaller $\alpha$ always causes slower
-training. The best AdaGrad-OTA result appears at $\alpha=1.5$, and the best
-Adam-OTA result appears at $\alpha=1.3$. This non-monotonic behaviour can
-come from four non-exclusive sources: (a) a global server learning rate that
-is not equally well matched to every $(\text{method},\alpha)$ pair, (b) the
-fixed scale $\gamma=0.05$ which changes the signal-to-noise ratio differently
-under different $\alpha$, (c) the shared $\alpha$ in both the channel sampler
-and the adaptive denominator, which introduces a coupling absent from the
-reference paper, and (d) the limited 100-round training budget.
-A per-$(\text{method},\alpha)$ learning-rate sweep would distinguish (a) from
-the rest; we provide the script \path{src/experiments/lr_sweep.py} for this
-purpose and leave the full sweep to future work
-(\S\ref{sec:future-work}).
-For this reason, the alpha ablation should be treated as evidence for
-adaptive robustness relative to the implemented baselines, not as a full
-reproduction of the reference paper's tail-index convergence trend.
+The result supports the core robustness claim: server-side fractional
+second-moment normalization makes the implemented OTA-FL loop much less
+fragile under impulsive $\alpha$-stable noise than FedAvg-style updates.
+It also matches the reference paper's qualitative tail-index message:
+heavier tails make training harder, and performance generally improves as
+$\alpha$ approaches the Gaussian endpoint. The result is still narrower than
+a full reproduction of \cite{wang2024adaptive}. The implementation omits
+fading and power control, uses a shared $\alpha$ for both the channel and the
+adaptive denominator, and uses a single global server learning rate rather
+than per-method tuning in this table. The next section runs a targeted
+learning-rate sweep to test how much of Adam-OTA's lower $\alpha=1.3$ result
+comes from lr mismatch.
+
+\section{Server Learning-Rate Sweep}
+\label{sec:lr-sweep}
+The tail-index ablation uses a single server learning rate,
+$\eta=10^{-2}$, for all methods. To check whether Adam-OTA's lower default
+accuracy at $\alpha=1.3$ is mainly a tuning artifact, we rerun AdaGrad-OTA
+and Adam-OTA on the same CIFAR-10 / ResNet-18 setting over seven learning
+rates from $10^{-4}$ to $10^{-1}$.
+
+\IfFileExists{data/generated/lr_sweep_table.tex}{
+    \input{data/generated/lr_sweep_table}
+}{
+    \begin{table}[!htbp]
+        \centering
+        \caption{CIFAR-10 server learning-rate sweep under heavy-tailed interference}
+        \label{tab:lr-sweep}
+        \begin{tabular}{c|c}
+            \hline
+            Result file & Status \\
+            \hline
+            \path{results/heavytail/lr_sweep_cifar10_resnet18_alpha1.3.json}
+            & Run \path{./run_all.sh lr_sweep} and generate the table with
+            \path{src/experiments/report.py} \\
+            \hline
+        \end{tabular}
+    \end{table}
+}
+
+\begin{figure}[!htbp]
+    \centering
+    \IfFileExists{../results/figures/lr_sweep_cifar10_resnet18_alpha1.3_plot.png}{
+        \includegraphics[width=0.9\textwidth]{../results/figures/lr_sweep_cifar10_resnet18_alpha1.3_plot.png}
+    }{
+        \fbox{\parbox{0.85\textwidth}{\centering
+        Learning-rate sweep figure is generated by
+        \path{./run_all.sh lr_sweep}.}}
+    }
+    \caption{CIFAR-10 final accuracy as a function of server learning rate at
+    $\alpha=1.3$, $\gamma=0.05$.}
+    \label{fig:lr-sweep}
+\end{figure}
+
+Table \ref{tab:lr-sweep} and Figure \ref{fig:lr-sweep} show that the adaptive
+methods prefer different server learning rates. AdaGrad-OTA is best at the
+default $\eta=10^{-2}$, reaching 34.62\% $\pm$ 0.64\% final accuracy, which
+matches the 34.56\% result in the tail-index table up to rerun variation.
+Adam-OTA is best one decade lower, at $\eta=10^{-3}$, where it reaches
+33.65\% $\pm$ 0.85\%. This is a 6.95 percentage-point gain over the
+$\eta=10^{-2}$ row in the same sweep, and a 6.74 percentage-point gain over
+the default Adam-OTA result in Table~\ref{tab:alpha-ablation}.
+The sweep therefore shows that Adam-OTA's lower default accuracy is partly a
+learning-rate mismatch, but the tested grid does not reverse the ranking:
+AdaGrad-OTA remains slightly ahead at its own best learning rate. Both
+methods fail the finite-value guard at $\eta=10^{-1}$, confirming that the
+adaptive denominator does not make arbitrarily large server steps safe.
 
 \section{MAC Robust Pre-Processing}
 Median Anchored Clipping (MAC) is a robust pre-processing technique
@@ -334,18 +390,16 @@ effect of rare impulsive coordinates when $\alpha<2$.
 \end{figure}
 
 In the completed MAC comparison, clipping does not create a meaningful
-accuracy improvement. MAC implementation in all four methods does not review any
-significant difference that solid enough to prove its validity, which 
-is consistent with the theoretical discussion
-above: for adaptive methods, MAC clips the outliers before the
-fractional accumulator can measure them, so the adaptive denominator
-lacks the signal it needs to contract the step size. For non-adaptive
-baselines, MAC could in principle help, but at $\gamma=0.05$ the typical
-coordinate-wise magnitude of $\xi^t$ is already small and the empirical
+accuracy improvement. Across all four methods, the no-MAC and MAC results are
+within seed variation, so the current evidence is not strong enough to claim
+that MAC improves accuracy at this operating point. This is consistent with
+the theoretical discussion above: for adaptive methods, MAC clips the
+outliers before the fractional accumulator can measure them, so the adaptive
+denominator has less signal for contracting the step size. For non-adaptive
+baselines, MAC could in principle help, but at $\gamma=0.05$ the empirical
 fraction of coordinates that violate the MAD band
-$[m-k\cdot\mathrm{MAD},\,m+k\cdot\mathrm{MAD}]$ at $k=3$ is below roughly
-$0.5\%$ per round; MAC therefore has almost no signal to work on even
-for the baselines.
+$[m-k\cdot\mathrm{MAD},\,m+k\cdot\mathrm{MAD}]$ at $k=3$ is small; MAC
+therefore has little signal to work on even for the baselines.
 A meaningful MAC effect is expected to require a more impulsive operating
 point (smaller $\alpha$, larger $\gamma$, or smaller $k$), which we
 explore in the \texttt{mac\_sweep} extension in
@@ -401,15 +455,14 @@ state-of-the-art Adam-OTA configuration.
 \end{figure}
 
 \paragraph{Why does $N$ not scale accuracy faster?}
-OTA aggregation averages clients in the analog domain, so the
-\emph{signal} scales as $1/N$ but, for $\alpha$-stable noise, the
-\emph{noise} scales only as $N^{1/\alpha-1}$ because the sum of
-$N$ i.i.d.\ $S\alpha S$ samples is $N^{1/\alpha}$-scaled. At $\alpha=2$
-this gives the familiar $1/\sqrt{N}$ SNR improvement; at $\alpha=1.3$
-the improvement slows to $N^{1/\alpha-1}=N^{-0.23}$. Doubling $N$ from
-50 to 100 therefore only adds roughly 1.4 percentage points of
-accuracy in this ablation, which is consistent with the observed
-20.36\% $\to$ 21.72\% increase in Table~\ref{tab:client-ablation}.
+In the implemented oracle, additive receiver noise is injected after the
+client updates are summed and then divided by $N\eta_{\rm loc}$, so the
+channel-noise term decreases as $1/N$ in this simulator. The accuracy gain is
+nevertheless modest because increasing $N$ also changes the non-IID client
+partition, reduces the average data per client, and keeps the same small
+server learning rate and 100-round budget. The client-count ablation should
+therefore be interpreted as a software sanity check that larger participation
+helps, not as a physical-layer scaling law.
 
 \section{Discussion}
 
@@ -435,26 +488,28 @@ channel noise.
 
 \subsection{Failures and Negative Results}
 Three observations are best reported as negative results rather than
-buried in caveats. (i) The $\alpha$-trend is non-monotonic under a
-single global server learning rate, which does not match the monotonic
-trend reported by~\cite{wang2024adaptive}; we attribute this to a
-combination of lr-mismatch, shared $\alpha$ between channel and
-denominator, and a shorter training budget. (ii) MAC at the default
-$\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point yields no
-measurable improvement within seed variation. (iii) The Adam-OTA
-CIFAR-10 result at $\alpha=2$ in Table~\ref{tab:cifar-results}
-(40.66\%) is below FedAvgM-OTA (63.94\%), showing that second-moment
-normalization is not costless in the Gaussian regime.
+buried in caveats. (i) Adam-OTA does not outperform AdaGrad-OTA in the
+current heavy-tail sweep, despite the stronger Adam-like result reported
+by~\cite{wang2024adaptive}; the learning-rate sweep shows that lr mismatch
+explains part, but not all, of the gap at $\alpha=1.3$. (ii) MAC at the
+default $\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point yields no
+measurable improvement within seed variation. (iii) The Adam-OTA CIFAR-10
+result at $\alpha=2$ in
+Table~\ref{tab:cifar-results} (40.66\%) is below FedAvgM-OTA (63.94\%),
+showing that second-moment normalization is not costless in the Gaussian
+regime.
 
 \subsection{Threats to Validity}
+\label{sec:threats-validity}
 The empirical evidence is bounded by four threats. First, seed counts
 differ across tables (three seeds for the $\alpha$ sweep and MAC
 comparison, single seed for the main comparison and client-count
 ablation); we note this in the captions rather than backfill all
-tables. Second, no per-method learning-rate sweep is performed, so the
-absolute ranking of adaptive versus momentum baselines at a specific
-$(\alpha,\gamma)$ point must be interpreted as lr-dependent. Third, the
-channel is a simulator, without fading, power control, or
-synchronization errors. Fourth, the strongest supported claim is
-empirical; the one-dimensional closed-form in~\S3.6 is suggestive but
-not a full non-convex proof.
+tables. Second, the learning-rate sweep is targeted rather than exhaustive:
+it covers only AdaGrad-OTA and Adam-OTA at $\alpha=1.3$, so broader optimizer
+rankings across all $\alpha$ values, $\beta_2$ values, and baselines remain
+tuning-dependent. Third, the channel is a simulator, without fading, power
+control, or synchronization errors. Fourth, the strongest supported claim is
+empirical; the finite-trace stability analysis in
+\S\ref{sec:finite-trace-stability} explains the implemented
+normalization mechanism but is not a full non-convex proof.

@@ -65,7 +65,7 @@ class AdamOTA:
 
         Args:
             agg_grads: OTA-aggregated gradients [g_t], one tensor per parameter,
-                       already normalized by N.
+                       already normalized by the federated loop.
         """
         self.t += 1
         bc1 = 1.0 - self.beta1 ** self.t

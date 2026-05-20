@@ -25,11 +25,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import numpy as np
 import torch
 
 from .accelerate import (
@@ -40,8 +37,8 @@ from .accelerate import (
 from .heavy_tail import (
     DEFAULT_METHODS,
     DEFAULT_SEEDS,
+    _run_seed_trials,
     _summary,
-    run_trial,
 )
 
 
@@ -67,20 +64,14 @@ def run_lr_sweep(args, device: torch.device) -> dict:
             print(f"  lr={lr_key:<8} method={method}", flush=True)
             trial_args = argparse.Namespace(**vars(args))
             trial_args.server_lr = lr
-            seeds = args.seeds
-            if len(seeds) > 1:
-                with ThreadPoolExecutor(max_workers=len(seeds)) as executor:
-                    futures = [
-                        executor.submit(
-                            run_trial, method, args.mac_alpha, seed,
-                            args.use_mac, trial_args, device,
-                        )
-                        for seed in seeds
-                    ]
-                    runs = [f.result() for f in futures]
-            else:
-                runs = [run_trial(method, args.mac_alpha, seeds[0],
-                                  args.use_mac, trial_args, device)]
+            runs = _run_seed_trials(
+                method,
+                args.mac_alpha,
+                args.seeds,
+                args.use_mac,
+                trial_args,
+                device,
+            )
             results[lr_key][method] = {
                 "runs": runs,
                 "summary": _summary(runs),
@@ -109,10 +100,14 @@ def parse_args():
     p.add_argument("--use_mac", action="store_true", default=False)
     p.add_argument("--methods", type=_parse_str_list, default=DEFAULT_METHODS)
     p.add_argument("--seeds", type=_parse_int_list, default=DEFAULT_SEEDS)
+    p.add_argument("--parallel_seeds", action="store_true", default=False,
+                   help="Run seeds concurrently; off by default because each trial resets global RNG state.")
     p.add_argument("--non_iid", action="store_true", default=True)
     p.add_argument("--dir_conc", type=float, default=0.1)
     p.add_argument("--log_every", type=int, default=1)
     p.add_argument("--save_diagnostics", action="store_true", default=False)
+    p.add_argument("--max_eval_loss", type=float, default=1e6,
+                   help="Stop a run as diverged when finite eval loss exceeds this value. Set <=0 to disable.")
     p.add_argument("--out_dir", type=str, default="results/heavytail")
     add_accelerator_args(p)
     return p.parse_args()

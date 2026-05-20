@@ -25,6 +25,8 @@ def add_accelerator_args(parser: argparse.ArgumentParser) -> None:
 
 def resolve_accelerator_args(args, device: torch.device) -> None:
     cuda = device.type == "cuda"
+    if cuda and hasattr(torch, "set_float32_matmul_precision"):
+        torch.set_float32_matmul_precision("high")
     dataset = getattr(args, "dataset", "")
     model = getattr(args, "model", "")
     supports_channels_last = dataset == "cifar10" and model in {"convnet", "resnet18", "resnet34"}
@@ -35,10 +37,11 @@ def resolve_accelerator_args(args, device: torch.device) -> None:
         if args.channels_last is None
         else bool(args.channels_last) and supports_channels_last
     )
-    args.use_fast_data = (
-        cuda and dataset == "cifar10"
-        if args.fast_data == "auto"
-        else args.fast_data == "on"
+    # The fast loader is CIFAR-10 specific: it expects NHWC uint8 images and
+    # applies CIFAR normalization/augmentation. Never route MNIST through it,
+    # even if a global shell override sets FAST_DATA=on.
+    args.use_fast_data = dataset == "cifar10" and (
+        cuda if args.fast_data == "auto" else args.fast_data == "on"
     )
     args.eval_every = max(1, int(args.eval_every))
     args.diagnostics_every = max(0, int(args.diagnostics_every))

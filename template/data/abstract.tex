@@ -6,10 +6,11 @@ clients by letting analog client updates superpose directly in the
 wireless multiple-access channel, but the same superposition injects
 channel noise into the server-side aggregate. When the interference is
 heavy-tailed, rare but very large impulsive samples can dominate a
-FedAvg-style update and destabilize training. This thesis asks whether
-server-side adaptive optimization with a fractional second-moment
-accumulator can act as an implicit, CSI-free filter that contracts the
-effective learning rate precisely when the aggregate is impulsive.
+FedAvg-style update and destabilize training. This thesis studies whether
+server-side adaptive optimization can improve robustness by responding to
+noisy OTA aggregates: a fractional second-moment accumulator increases
+normalization on impulsive coordinates and thereby reduces their effective
+update scale without requiring channel state information (CSI).
 
 We implement a PyTorch OTA-FL simulator with a symmetric
 $\alpha$-stable channel oracle based on the Chambers--Mallows--Stuck
@@ -17,24 +18,30 @@ sampler, four server optimizers
 (FedAvg-OTA, FedAvgM-OTA, AdaGrad-OTA, Adam-OTA) that all consume the
 same noisy aggregate, Median Anchored Clipping (MAC) as a robust
 pre-processing option, and an experiment layer that produces JSON
-logs, figures, and LaTeX tables. The AWGN case is treated as the
-special case $\alpha=2$; $\alpha<2$ models heavy-tailed
-interference.
+logs, figures, and LaTeX tables. The parameter $\alpha$ is the tail
+index of the wireless noise: smaller $\alpha$ indicates a heavier tail
+and poorer channel conditions, while the AWGN case is recovered at
+$\alpha=2$.
 
 On CIFAR-10 (ResNet-18, $N=100$, 100 rounds, $\gamma=0.05$, 3 seeds),
-AdaGrad-OTA reaches 49.52--51.75\% final accuracy and Adam-OTA reaches
-42.88--44.82\% across $\alpha\in\{1.1,1.3,1.5,1.7,1.9\}$, compared with
-11.9\% (FedAvg-OTA) and 20.5--20.7\% (FedAvgM-OTA): a 25--40 percentage
-point margin in favor of fractional second-moment adaptation.
-MAC at the default operating point ($\alpha=1.3$, $\gamma=0.05$,
-$k=3$) is empirically neutral within seed variation, and the
-$\alpha$-trend is non-monotonic, with the best AdaGrad-OTA result at
-$\alpha=1.5$ and the best Adam-OTA result at $\alpha=1.3$. The
-project is therefore not a complete reproduction of the reference
-paper; its contribution is a reproducible empirical validation of a
-carefully scoped adaptive OTA-FL robustness claim, together with a
-one-dimensional intuition for the implicit step-size shrinkage
-mechanism.
+AdaGrad-OTA completes all runs and its mean final accuracy increases
+from 30.22\% to 41.82\% as $\alpha$ rises from 1.1 to 1.9, while
+Adam-OTA also completes all runs and improves from 20.69\% to 37.98\%.
+This trend matches the channel interpretation: larger $\alpha$ means a
+lighter-tailed, less impulsive channel. In contrast, FedAvg-OTA
+and FedAvgM-OTA complete no runs for $\alpha\leq1.7$ and only one of
+three seeds at $\alpha=1.9$. At the AWGN endpoint $\alpha=2$, all
+methods complete, with FedAvgM-OTA remaining competitive. MAC at the
+default operating point ($\alpha=1.3$, $\gamma=0.05$, $k=3$) is
+empirically neutral within seed variation. A targeted server
+learning-rate sweep under the severe $\alpha=1.3$ channel shows that
+Adam-OTA is tuning-sensitive: reducing $\eta$ from $10^{-2}$ to
+$10^{-3}$ improves its mean final accuracy from 26.70\% to 33.65\%,
+while AdaGrad-OTA reaches 34.62\% at $\eta=10^{-2}$. The project is
+therefore not a complete reproduction of the reference paper; its
+contribution is a reproducible empirical validation of a carefully
+scoped adaptive OTA-FL robustness claim, together with a finite-trace
+stability analysis of the noise-adaptive normalization mechanism.
 
 \noindent\textbf{Keywords:} federated learning; over-the-air aggregation;
 $\alpha$-stable noise; heavy-tailed interference; adaptive

@@ -82,12 +82,3 @@ Adam-OTA       & $m_t=\beta_1 m_{t-1}+(1-\beta_1)\tilde g^t;$
 \hline
 \end{tabular}
 \end{center}
-
-\section*{D. Hardware}
-All reported experiments are run on a single NVIDIA GPU with
-PyTorch's default CUDA backend; wall-clock time for the full
-$\alpha$ ablation ($4$ methods $\times$ $6$ $\alpha$ values $\times$
-$3$ seeds $\times$ $100$ rounds) is approximately 3 hours. The full
-MAC $(k,\gamma)$ sweep uses an additional 1.5 hours. Exact device
-information is embedded in each JSON payload under the
-\texttt{args} field.

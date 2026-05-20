@@ -1,0 +1,12 @@
+
+==> uv run -m src.experiments.heavy_tail --study alpha --dataset mnist --model mlp --rounds 1 --num_clients 5 --local_epochs 1 --batch_size 64 --server_lr 0.01 --local_lr 0.01 --momentum 0.9 --beta2 0.999 --noise_scale 0.05 --alphas 1.1,1.3 --seeds 42 --methods adagrad_ota,adam_ota --log_every 1 --save_diagnostics --out_dir results/heavytail/sanity --amp_dtype bf16 --fast_data on --eval_every 1 --eval_batch_size 1024 --diagnostics_every 0 --amp --channels_last
+Device: cuda | Config: {'study': 'alpha', 'dataset': 'mnist', 'model': 'mlp', 'rounds': 1, 'num_clients': 5, 'local_epochs': 1, 'batch_size': 64, 'server_lr': 0.01, 'local_lr': 0.01, 'momentum': 0.9, 'beta2': 0.999, 'noise_scale': 0.05, 'alphas': [1.1, 1.3], 'mac_alpha': 1.3, 'mac_clip': 3.0, 'mac_clips': [0.0, 1.0, 2.0, 3.0, 5.0], 'mac_noise_scales': [0.05, 0.1, 0.2], 'use_mac': False, 'methods': ['adagrad_ota', 'adam_ota'], 'seeds': [42], 'parallel_seeds': False, 'non_iid': True, 'dir_conc': 0.1, 'log_every': 1, 'save_diagnostics': True, 'out_dir': 'results/heavytail/sanity', 'amp': True, 'amp_dtype': 'bf16', 'channels_last': True, 'eval_batch_size': 1024, 'eval_every': 1, 'diagnostics_every': 0, 'fast_data': 'on', 'use_amp': True, 'use_channels_last': False, 'use_fast_data': False}
+AMP:       True (bf16) | channels_last=False
+Fast data: False (on) | eval_every=1 | diagnostics_every=0
+
+=== Heavy-tail ablation: alpha-stable tail index ===
+  alpha=1.1 seed=42  no-MAC adagrad_ota  round    1/1 loss=1.8553 acc=0.5497
+  alpha=1.1 seed=42  no-MAC adam_ota     round    1/1 loss=1.8548 acc=0.5502
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    1/1 loss=1.8604 acc=0.5541
+  alpha=1.3 seed=42  no-MAC adam_ota     round    1/1 loss=1.8605 acc=0.5544
+Saved: results/heavytail/sanity/alpha_ablation_mnist_mlp.json

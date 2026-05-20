@@ -13,6 +13,9 @@ realisation for a fair comparison.
 Usage:
     uv run -m src.experiments.compare
     uv run -m src.experiments.compare --dataset cifar10 --model resnet18 --rounds 200
+
+The default CLI settings match the CIFAR-10 / ResNet-18 controlled
+comparison reported in Table 4.4 of the thesis.
 """
 
 import argparse
@@ -106,12 +109,6 @@ def run_comparison(args) -> dict:
             pin_memory=True,
         )
 
-    oracle = NoisyOracle(
-        alpha=args.alpha,
-        noise_scale=args.noise_scale,
-        device=device,
-    )
-
     methods = ["fedavg", "fedavgm", "adagrad_ota", "adam_ota"]
     results = {m: {"loss": [], "acc": [], "eval_rounds": []} for m in methods}
 
@@ -124,6 +121,11 @@ def run_comparison(args) -> dict:
         set_seed(args.seed)
         model = configure_model(get_model(args.model, num_classes=10), args, device)
         opt = build_optimizer(method, model, args)
+        oracle = NoisyOracle(
+            alpha=args.alpha,
+            noise_scale=args.noise_scale,
+            device=device,
+        )
 
         for rnd in range(1, args.rounds + 1):
             run_round(
@@ -166,13 +168,14 @@ def parse_args():
     p.add_argument("--model", default="resnet18",
                    choices=["mlp", "convnet", "resnet18", "resnet34"])
     p.add_argument("--rounds", type=int, default=200)
-    p.add_argument("--num_clients", type=int, default=10)
+    p.add_argument("--num_clients", type=int, default=100,
+                   help="Number of FL clients; Table 4.4 uses 100 for CIFAR-10")
     p.add_argument("--local_epochs", type=int, default=5)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--server_lr", type=float, default=0.1)
     p.add_argument("--local_lr", type=float, default=0.01)
     p.add_argument("--momentum", type=float, default=0.9, help="β₁ for momentum / 1st moment")
-    p.add_argument("--beta2", type=float, default=0.3, help="Adam-OTA β₂")
+    p.add_argument("--beta2", type=float, default=0.999, help="Adam-OTA β₂")
     p.add_argument("--alpha", type=float, default=2.0,
                    help="Stability index of the noise (2.0 = AWGN, default)")
     p.add_argument("--noise_scale", type=float, default=0.05,
@@ -187,6 +190,7 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out_dir", type=str, default="results/comparison")
     add_accelerator_args(p)
+    p.set_defaults(eval_every=1)
     return p.parse_args()
 
 

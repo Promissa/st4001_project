@@ -1,7 +1,9 @@
 """
 Alpha-stable noise generation using the Chambers-Mallows-Stuck method.
 
-Supports AWGN (alpha=2) and heavy-tailed impulsive noise (1 < alpha < 2).
+The implementation uses the symmetric S_alpha(scale) convention with
+characteristic function exp(-(scale * |t|)^alpha). Under this convention the
+Gaussian endpoint alpha=2 is N(0, 2 * scale^2), i.e. std=sqrt(2)*scale.
 """
 
 import torch
@@ -27,14 +29,16 @@ def sample_alpha_stable(
     """
     if not (0 < alpha <= 2):
         raise ValueError(f"alpha must be in (0, 2], got {alpha}")
+    if scale < 0:
+        raise ValueError(f"scale must be non-negative, got {scale}")
 
     if scale == 0:
         return torch.zeros(size, device=device, dtype=torch.float32)
 
     if alpha == 2:
-        # Gaussian special case: use scale directly as std so that alpha=2.0
-        # is the cleanest channel (lighter tails than any alpha<2 at same scale).
-        return torch.randn(size, device=device, dtype=torch.float32) * scale
+        # S_2(scale) has characteristic function exp(-scale^2 t^2), matching
+        # N(0, 2*scale^2). This keeps gamma consistent with S_alpha(gamma).
+        return torch.randn(size, device=device, dtype=torch.float32) * (2.0 ** 0.5 * scale)
 
     # CMS method directly in torch. On CUDA this avoids NumPy CPU generation
     # and a large host->device transfer for every parameter tensor.
@@ -44,8 +48,14 @@ def sample_alpha_stable(
     U = (torch.rand(size_t, device=device, dtype=dtype) - 0.5) * pi
     W = torch.empty(size_t, device=device, dtype=dtype).exponential_(1.0)
 
-    # Symmetric case (beta=0)
-    term1 = torch.sin(alpha * U)
+    if alpha == 1:
+        return torch.tan(U) * scale
+
+    # Symmetric CMS formula (beta=0):
+    # X = sin(alpha U) / cos(U)^(1/alpha)
+    #     * (cos((1-alpha)U) / W)^((1-alpha)/alpha)
+    cos_u = torch.cos(U).clamp_min(torch.finfo(dtype).tiny)
+    term1 = torch.sin(alpha * U) / cos_u.pow(1.0 / alpha)
     term2 = (torch.cos((1.0 - alpha) * U) / W).pow((1.0 - alpha) / alpha)
     X = term1 * term2
 

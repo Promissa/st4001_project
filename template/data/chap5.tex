@@ -5,32 +5,51 @@
 as an implicit, CSI-free filter for an $\alpha$-stable OTA-FL channel.
 The main supported claim is empirical: under the three-seed CIFAR-10
 tail-index ablation with $\gamma=0.05$ and $\alpha\in\{1.1,1.3,1.5,
-1.7,1.9\}$, AdaGrad-OTA (49.52--51.75\%) and Adam-OTA (42.88--44.82\%)
-outperform FedAvg-OTA (~11.9\%) and FedAvgM-OTA (20.5--20.7\%) by a
-large margin, which supports the hypothesis that a fractional
-second-moment accumulator contracts the effective server learning rate
-precisely on impulsive rounds.
+1.7,1.9\}$, AdaGrad-OTA and Adam-OTA complete all runs, while
+FedAvg-OTA and FedAvgM-OTA complete no runs for $\alpha\leq1.7$ and
+only one of three seeds at $\alpha=1.9$. AdaGrad-OTA reaches
+30.22--41.82\% final accuracy across the heavy-tail sweep, and
+Adam-OTA reaches 20.69--37.98\%. This supports the hypothesis that a
+fractional second-moment accumulator contracts the effective server
+learning rate on impulsive rounds and improves stability.
 
 The claim is scoped rather than absolute. The observed $\alpha$-trend
-is non-monotonic at a fixed server learning rate; MAC at the default
+for adaptive methods is broadly monotone and agrees with the qualitative
+message that heavier tails slow training. MAC at the default
 $\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point is empirically
-neutral; and in the $\alpha=2$ CIFAR-10 comparison FedAvgM-OTA
-remains the strongest method (63.94\%), which shows that fractional
-second-moment normalization is not costless in the Gaussian regime.
+neutral; Adam-OTA does not outperform AdaGrad-OTA under the current
+hyperparameters; and the targeted $\alpha=1.3$ learning-rate sweep shows
+that Adam-OTA improves from 26.70\% to 33.65\% when $\eta$ is reduced from
+$10^{-2}$ to $10^{-3}$, but still does not exceed AdaGrad-OTA's best
+34.62\%. In the $\alpha=2$ CIFAR-10 comparison FedAvgM-OTA remains the
+strongest method (63.94\%), which shows that fractional second-moment
+normalization is not costless in the Gaussian regime.
 The main output is therefore a reproducible PyTorch simulator with
 $\alpha$-stable tail-index experiments, MAC robustness comparisons,
-and a one-dimensional intuition for the shrinkage mechanism, rather
-than a complete theoretical proof or line-by-line reproduction of the
-reference paper.
+and a finite-trace stability analysis for the shrinkage mechanism,
+rather than a complete non-convex convergence proof or line-by-line
+reproduction of the reference paper.
 
 \section{Limitations}
 \ \ \ \ \, The project remains narrower than the full reference paper in four
-ways. First, it provides a one-dimensional closed-form intuition
-rather than a full non-convex convergence proof. Second, the wireless
+ways. First, it provides simulator-aligned finite-trace stability
+propositions rather than the full multi-dimensional non-convex
+convergence proof in the reference paper. Second, the wireless
 channel is a simulation oracle and does not model mobility, multi-cell
 interference, synchronization errors, CSI acquisition, or power
 control. Third, the project does not include a software-defined-radio
 or real wireless testbed validation. Fourth, the empirical evidence is
-bounded by three seeds and a single global server learning rate per
-experiment, so the non-monotonic $\alpha$-trend cannot yet be
-disentangled from lr-mismatch (see~\S4.5 and~\S4.8.3).
+bounded by three seeds and a targeted learning-rate sweep at only one
+heavy-tailed operating point, so full optimizer rankings remain
+tuning-dependent (see~\S\ref{sec:lr-sweep} and~\S\ref{sec:threats-validity}).
+
+\section{Future Work}
+\label{sec:future-work}
+\ \ \ \ \, The most direct next step is to expand the targeted
+learning-rate sweep into a full per-method $\eta$ and $\beta_2$ sweep for
+each $\alpha$, including the FedAvg-style baselines. A second extension is
+to replace the current additive-noise oracle with a richer wireless model
+that includes fading, power control, and synchronization error. Finally, the
+MAC sweep should be repeated at stronger operating points, such as smaller
+$\alpha$, larger $\gamma$, or smaller clipping factor $k$, where robust
+pre-processing has a clearer signal to act on.

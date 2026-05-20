@@ -1,0 +1,80 @@
+
+==> uv run -m src.experiments.heavy_tail --study mac --dataset cifar10 --model resnet18 --rounds 100 --num_clients 100 --local_epochs 1 --batch_size 64 --server_lr 0.01 --local_lr 0.01 --momentum 0.9 --beta2 0.999 --noise_scale 0.05 --mac_alpha 1.3 --mac_clip 3.0 --seeds 42,43,44 --methods fedavg,fedavgm,adagrad_ota,adam_ota --dir_conc 0.1 --out_dir results/heavytail --max_eval_loss 1e6 --amp_dtype bf16 --fast_data on --eval_every 1 --eval_batch_size 1024 --diagnostics_every 0 --amp --channels_last
+/home/promissa/projects/st4001_project/.venv/lib/python3.13/site-packages/torchvision/datasets/cifar.py:83: VisibleDeprecationWarning: dtype(): align should be passed as Python or NumPy boolean but got `align=0`. Did you mean to pass a tuple to create a subarray type? (Deprecated NumPy 2.4)
+  entry = pickle.load(f, encoding="latin1")
+Device: cuda | Config: {'study': 'mac', 'dataset': 'cifar10', 'model': 'resnet18', 'rounds': 100, 'num_clients': 100, 'local_epochs': 1, 'batch_size': 64, 'server_lr': 0.01, 'local_lr': 0.01, 'momentum': 0.9, 'beta2': 0.999, 'noise_scale': 0.05, 'alphas': [1.1, 1.3, 1.5, 1.7, 1.9, 2.0], 'mac_alpha': 1.3, 'mac_clip': 3.0, 'mac_clips': [0.0, 1.0, 2.0, 3.0, 5.0], 'mac_noise_scales': [0.05, 0.1, 0.2], 'use_mac': False, 'methods': ['fedavg', 'fedavgm', 'adagrad_ota', 'adam_ota'], 'seeds': [42, 43, 44], 'parallel_seeds': False, 'non_iid': True, 'dir_conc': 0.1, 'log_every': 1, 'save_diagnostics': False, 'max_eval_loss': 1000000.0, 'out_dir': 'results/heavytail', 'amp': True, 'amp_dtype': 'bf16', 'channels_last': True, 'eval_batch_size': 1024, 'eval_every': 1, 'diagnostics_every': 0, 'fast_data': 'on', 'use_amp': True, 'use_channels_last': True, 'use_fast_data': True}
+AMP:       True (bf16) | channels_last=True
+Fast data: True (on) | eval_every=1 | diagnostics_every=0
+
+=== Robust pre-processing: MAC vs no-MAC ===
+  alpha=1.3 seed=42  no-MAC fedavg       round    1/100 loss=4.4558 acc=0.0934
+  alpha=1.3 seed=42  no-MAC fedavg       round    2/100 status=nonfinite_eval clean_grad_max_abs=0.09653 noise_max_abs_normalized=4.705e+27 agg_max_abs=4.705e+27 update_to_agg_norm=0
+/home/promissa/projects/st4001_project/.venv/lib/python3.13/site-packages/torchvision/datasets/cifar.py:83: VisibleDeprecationWarning: dtype(): align should be passed as Python or NumPy boolean but got `align=0`. Did you mean to pass a tuple to create a subarray type? (Deprecated NumPy 2.4)
+  entry = pickle.load(f, encoding="latin1")
+  alpha=1.3 seed=43  no-MAC fedavg       round    1/100 status=nonfinite_eval clean_grad_max_abs=0.1388 noise_max_abs_normalized=6.374e+27 agg_max_abs=6.374e+27 update_to_agg_norm=0
+  alpha=1.3 seed=44  no-MAC fedavg       round    1/100 loss=5.4569 acc=0.1024
+  alpha=1.3 seed=44  no-MAC fedavg       round    2/100 loss=8.7078 acc=0.0848
+  alpha=1.3 seed=44  no-MAC fedavg       round    3/100 status=diverged_eval loss=1.193e+25 acc=0.1000 threshold=1e+06 clean_grad_max_abs=0.3435 noise_max_abs_normalized=7.44e+27 agg_max_abs=7.44e+27 update_to_agg_norm=0
+  alpha=1.3 seed=42  no-MAC fedavgm      round    1/100 loss=4.4551 acc=0.0935
+  alpha=1.3 seed=42  no-MAC fedavgm      round    2/100 status=nonfinite_eval clean_grad_max_abs=0.09688 noise_max_abs_normalized=4.705e+27 agg_max_abs=4.705e+27 update_to_agg_norm=0
+  alpha=1.3 seed=43  no-MAC fedavgm      round    1/100 status=nonfinite_eval clean_grad_max_abs=0.1388 noise_max_abs_normalized=6.374e+27 agg_max_abs=6.374e+27 update_to_agg_norm=0
+  alpha=1.3 seed=44  no-MAC fedavgm      round    1/100 loss=5.4569 acc=0.1024
+  alpha=1.3 seed=44  no-MAC fedavgm      round    2/100 loss=23.8606 acc=0.0909
+  alpha=1.3 seed=44  no-MAC fedavgm      round    3/100 status=diverged_eval loss=4.537e+25 acc=0.1000 threshold=1e+06 clean_grad_max_abs=0.3535 noise_max_abs_normalized=7.44e+27 agg_max_abs=7.44e+27 update_to_agg_norm=0
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    1/100 loss=2.7165 acc=0.1015
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    2/100 loss=2.9272 acc=0.1000
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    3/100 loss=3.8428 acc=0.1001
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    4/100 loss=3.0324 acc=0.1083
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    5/100 loss=2.3047 acc=0.1899
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    6/100 loss=2.6471 acc=0.1279
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    7/100 loss=2.6145 acc=0.1462
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    8/100 loss=2.4357 acc=0.1843
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round    9/100 loss=2.3540 acc=0.1973
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   10/100 loss=2.3718 acc=0.1607
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   11/100 loss=2.3392 acc=0.1518
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   12/100 loss=2.1321 acc=0.1898
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   13/100 loss=2.0093 acc=0.2413
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   14/100 loss=1.9817 acc=0.2454
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   15/100 loss=1.9694 acc=0.2518
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   16/100 loss=1.9511 acc=0.2565
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   17/100 loss=1.9295 acc=0.2673
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   18/100 loss=1.9178 acc=0.2695
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   19/100 loss=1.9119 acc=0.2772
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   20/100 loss=1.9124 acc=0.2748
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   21/100 loss=1.9058 acc=0.2773
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   22/100 loss=1.8916 acc=0.2819
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   23/100 loss=1.8770 acc=0.2904
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   24/100 loss=1.8616 acc=0.3004
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   25/100 loss=1.8528 acc=0.3047
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   26/100 loss=1.8450 acc=0.3042
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   27/100 loss=1.8421 acc=0.3018
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   28/100 loss=1.8412 acc=0.2998
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   29/100 loss=1.8404 acc=0.2994
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   30/100 loss=1.8383 acc=0.3034
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   31/100 loss=1.8345 acc=0.3092
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   32/100 loss=1.8290 acc=0.3128
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   33/100 loss=1.8255 acc=0.3166
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   34/100 loss=1.8208 acc=0.3207
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   35/100 loss=1.8181 acc=0.3200
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   36/100 loss=1.8156 acc=0.3206
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   37/100 loss=1.8128 acc=0.3206
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   38/100 loss=1.8096 acc=0.3190
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   39/100 loss=1.8084 acc=0.3206
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   40/100 loss=1.8082 acc=0.3197
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   41/100 loss=1.8096 acc=0.3200
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   42/100 loss=1.8107 acc=0.3218
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   43/100 loss=1.8113 acc=0.3213
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   44/100 loss=1.8105 acc=0.3210
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   45/100 loss=1.8092 acc=0.3197
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   46/100 loss=1.8088 acc=0.3162
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   47/100 loss=1.8061 acc=0.3168
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   48/100 loss=1.8039 acc=0.3167
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   49/100 loss=1.8026 acc=0.3178
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   50/100 loss=1.8007 acc=0.3187
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   51/100 loss=1.7980 acc=0.3196
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   52/100 loss=1.7943 acc=0.3220
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   53/100 loss=1.7909 acc=0.3274
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   54/100 loss=1.7872 acc=0.3308
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   55/100 loss=1.7852 acc=0.3333
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   56/100 loss=1.7847 acc=0.3324
+  alpha=1.3 seed=42  no-MAC adagrad_ota  round   57/100 loss=1.7827 acc=0.3349
