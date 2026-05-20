@@ -14,7 +14,6 @@ from pathlib import Path
 
 METHOD_LABELS = {
     "fedavg": "FedAvg-OTA",
-    "fedavgm": "FedAvgM-OTA",
     "adagrad_ota": "AdaGrad-OTA",
     "adam_ota": "Adam-OTA",
 }

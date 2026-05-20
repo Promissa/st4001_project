@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023/Debian) (preloaded format=xelatex 2026.5.7)  20 MAY 2026 17:38
+This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023/Debian) (preloaded format=xelatex 2026.5.7)  20 MAY 2026 23:50
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -684,8 +684,28 @@ Chapter 4.
 
 
 ]
+Underfull \hbox (badness 10000) in paragraph at lines 50--50
+[]|\TU/TeXGyreTermes(0)/m/n/12 FedAvg-OTA,
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 50--50
+\TU/TeXGyreTermes(0)/m/n/12 AdaGrad-OTA,
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 50--51
+[]|\TU/TeXGyreTermes(0)/m/n/12 FedAvg-OTA,
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 50--51
+\TU/TeXGyreTermes(0)/m/n/12 AdaGrad-OTA,
+ []
+
+
 Underfull \hbox (badness 10000) in paragraph at lines 86--87
-[]|\TU/TeXGyreTermes(0)/m/n/12 FedAvg-OTA,FedAvgM-OTA,
+[]|\TU/TeXGyreTermes(0)/m/n/12 FedAvg-OTA,AdaGrad-OTA,Adam-
  []
 
 
@@ -694,13 +714,13 @@ Overfull \hbox (44.60121pt too wide) in paragraph at lines 89--91
  []
 
 [16]
-Overfull \hbox (4.2801pt too wide) in paragraph at lines 123--130
-\TU/TeXGyreTermes(0)/m/n/12 server-side normalization. FedAvg-OTA reaches 67.85% final accuracy, while FedAvgM-
+Overfull \hbox (0.24811pt too wide) in paragraph at lines 123--130
+\TU/TeXGyreTermes(0)/m/n/12 server-side normalization. FedAvg-OTA reaches 67.85% final accuracy, while AdaGrad-
  []
 
 
-Overfull \hbox (18.5611pt too wide) in paragraph at lines 149--161
-\TU/TeXGyreTermes(0)/m/n/12 strongest method in the controlled 200-round run, reaching 63.94% final accuracy. AdaGrad-
+Overfull \hbox (6.79509pt too wide) in paragraph at lines 148--158
+\TU/TeXGyreTermes(0)/m/n/12 OTA improve over plain FedAvg-OTA under this specific CIFAR-10 configuration. There-
  []
 
 [17]
@@ -709,13 +729,13 @@ File: ../results/figures/cifar10_resnet18_alpha2.0_N100_curves.png Graphic file 
  [18] (./data/generated/alpha_ablation_table.tex)
 File: ../results/figures/alpha_ablation_cifar10_resnet18_plot.png Graphic file (type bmp)
 <../results/figures/alpha_ablation_cifar10_resnet18_plot.png>
- [19] [20] (./data/generated/lr_sweep_table.tex)
+ [19] (./data/generated/lr_sweep_table.tex [20])
 File: ../results/figures/lr_sweep_cifar10_resnet18_alpha1.3_plot.png Graphic file (type bmp)
 <../results/figures/lr_sweep_cifar10_resnet18_alpha1.3_plot.png>
- [21] [22] (./data/generated/mac_compare_table.tex)
+ [21] (./data/generated/mac_compare_table.tex)
 File: ../results/figures/mac_compare_cifar10_resnet18_alpha1.3_plot.png Graphic file (type bmp)
 <../results/figures/mac_compare_cifar10_resnet18_alpha1.3_plot.png>
- [23]
+ [22] [23]
 File: ../results/figures/ablation_clients_cifar10_resnet18_plot.png Graphic file (type bmp)
 <../results/figures/ablation_clients_cifar10_resnet18_plot.png>
  [24] [25]) [26]
@@ -765,7 +785,7 @@ Overfull \hbox (131.43044pt too wide) in paragraph at lines 40--61
 
 
 ]
-Overfull \hbox (258.2931pt too wide) in paragraph at lines 70--84
+Overfull \hbox (254.2611pt too wide) in paragraph at lines 70--83
  [] 
  []
 
@@ -792,7 +812,7 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 Here is how much of TeX's memory you used:
  15575 strings out of 476443
  298463 string characters out of 5793963
- 1939627 words of memory out of 5000000
+ 1938627 words of memory out of 5000000
  37219 multiletter control sequences out of 15000+600000
  569718 words of font info for 114 fonts, out of 8000000 for 9000
  264 hyphenation exceptions out of 8191

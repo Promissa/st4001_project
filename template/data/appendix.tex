@@ -18,7 +18,7 @@ Module & Purpose \\
 \path{src/channel/ota.py}       & \texttt{NoisyOracle} for $\tilde g^t=(\sum_n \Delta_n^t+\xi^t)/N$ \\
 \path{src/channel/mac.py}       & Median Anchored Clipping pre-processing \\
 \path{src/data/datasets.py}     & MNIST/CIFAR-10 loading and Dirichlet partition \\
-\path{src/optimizers/baselines.py}   & FedAvg-OTA, FedAvgM-OTA \\
+\path{src/optimizers/baselines.py}   & FedAvg-OTA \\
 \path{src/optimizers/adagrad_ota.py} & AdaGrad-OTA with fractional $v_t^{1/\alpha}$ \\
 \path{src/optimizers/adam_ota.py}    & Adam-OTA with fractional $\hat v_t^{1/\alpha}$ \\
 \path{src/experiments/federated.py}  & Training loop \\
@@ -61,7 +61,7 @@ Seeds                  & 42/43/44   & Main comparison and client-count ablation 
 \end{center}
 
 \section*{C. Server-Optimizer Pseudocode}
-All four server methods share the per-round inputs ($\tilde g^t$,
+All three server methods share the per-round inputs ($\tilde g^t$,
 server learning rate $\eta$) and share the in-place update
 $w_{t+1}\leftarrow w_t - \Delta w$. They differ only in how $\Delta w$
 is computed from $\tilde g^t$.
@@ -72,7 +72,6 @@ is computed from $\tilde g^t$.
 Optimizer & Update rule \\
 \hline
 FedAvg-OTA     & $\Delta w = \eta\,\tilde g^t$ \\
-FedAvgM-OTA    & $m_t=\rho m_{t-1}+\tilde g^t;\ \Delta w=\eta\, m_t$ \\
 AdaGrad-OTA    & $s_t=\beta_1 s_{t-1}+(1-\beta_1)\tilde g^t;\ v_t=v_{t-1}+|s_t|^\alpha;$
                 $\Delta w = \eta\, s_t/(v_t^{1/\alpha}+\varepsilon)$ \\
 Adam-OTA       & $m_t=\beta_1 m_{t-1}+(1-\beta_1)\tilde g^t;$

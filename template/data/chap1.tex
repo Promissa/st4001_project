@@ -40,9 +40,9 @@ produces heavier tails and more frequent impulsive outliers; $\alpha=2$
 recovers the Gaussian AWGN case.
 
 The central research question is concrete and experimentally testable:
-\emph{how does the final test accuracy of FedAvg-OTA, FedAvgM-OTA,
+\emph{how does the final test accuracy of FedAvg-OTA,
 AdaGrad-OTA, and Adam-OTA depend on the tail index $\alpha$ and the
-noise scale $\gamma$, when all four optimizers consume the same OTA
+noise scale $\gamma$, when all three optimizers consume the same OTA
 aggregate $\tilde{g}^t$?} The current codebase implements a controlled simulator for the core
 heavy-tail mechanism ($\alpha$-stable OTA aggregation, adaptive server
 updates, and MAC robust pre-processing) and evaluates a narrower
@@ -57,7 +57,7 @@ reusable artifacts.
     \item Under the implemented heavy-tail CIFAR-10 setting
     (ResNet-18, $N=100$, 100 rounds, $\gamma=0.05$, three seeds),
     AdaGrad-OTA and Adam-OTA complete all three seeds for every tested
-    heavy-tail value, while FedAvg-OTA and FedAvgM-OTA complete no runs
+    heavy-tail value, while FedAvg-OTA completes no runs
     for $\alpha\leq1.7$ and only one of three seeds at $\alpha=1.9$.
     This directly supports the hypothesis that fractional second-moment
     adaptation stabilizes training in the presence of $\alpha$-stable

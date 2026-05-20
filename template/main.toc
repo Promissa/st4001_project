@@ -28,7 +28,7 @@
 \contentsline {section}{\numberline {4.3}Evaluation Metrics}{16}{section.4.3}%
 \contentsline {section}{\numberline {4.4}Main Method Comparison}{17}{section.4.4}%
 \contentsline {section}{\numberline {4.5}Alpha-Stable Tail-Index Ablation}{19}{section.4.5}%
-\contentsline {section}{\numberline {4.6}Server Learning-Rate Sweep}{21}{section.4.6}%
+\contentsline {section}{\numberline {4.6}Server Learning-Rate Sweep}{20}{section.4.6}%
 \contentsline {section}{\numberline {4.7}MAC Robust Pre-Processing}{22}{section.4.7}%
 \contentsline {section}{\numberline {4.8}Client-Count Ablation}{24}{section.4.8}%
 \contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{25}{paragraph*.21}%

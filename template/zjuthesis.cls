@@ -168,7 +168,7 @@
         \multicolumn{10}{|c|}{\xiaosi\textbf{Content Checklist}}                            & \multicolumn{2}{c|}{\xiaosi\bf\makecell{Evaluation                                                                                                                                                                                                                    \\ Section (√)}}                                                                                                                                                        \\
         \hline
         \multirow{14}{*}{\xiaosi\bf\makebox[1cm]{\rotatebox[origin=c]{-90}{Senior Thesis}}} & \multicolumn{9}{l|}{1. Cover (Use the unified cover, blue recommended)}      & {Good} & Fair                                                                                                                                                                          \\
-        \cline{2-12}                                                                        & \multicolumn{9}{l|}{2. Academic integrity Commitment of Senior Thesis}       & {}     &                                                                                                                                                                               \\
+        \cline{2-12}                                                                        & \multicolumn{9}{l|}{2. Academic Integrity Commitment of Senior Thesis}       & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{3.    Acknowledgements}                                  & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{4. Abstract}                                             & {}     &                                                                                                                                                                               \\
         \cline{2-12}                                                                        & \multicolumn{9}{l|}{5. Table of Contents}                                    & {}     &                                                                                                                                                                               \\
@@ -191,7 +191,7 @@
     \clearpage
     \centerline{\includegraphics[width=9.85cm]{images/logo2.png}}
     \vspace{1.2cm}
-    \centerline{\bfseries\xiaoer Academic integrity Commitment of Senior Thesis }
+    \centerline{\bfseries\xiaoer Academic Integrity Commitment of Senior Thesis }
     \vspace{1.2cm}
 
     \setlength{\parskip}{10pt}

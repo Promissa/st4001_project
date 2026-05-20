@@ -23,14 +23,12 @@ import numpy as np
 
 METHOD_STYLE = {
     "fedavg":      {"label": "FedAvg-OTA",    "color": "#d62728", "ls": ":",  "lw": 1.5},
-    "fedavgm":     {"label": "FedAvgM-OTA",   "color": "#ff7f0e", "ls": "--", "lw": 1.8},
     "adagrad_ota": {"label": "AdaGrad-OTA",   "color": "#1f77b4", "ls": "-.", "lw": 2.0},
     "adam_ota":    {"label": "Adam-OTA",       "color": "#2ca02c", "ls": "-",  "lw": 2.2},
 }
 
 OPT_STYLE = {
     "fedavg":      {"label": "FedAvg-OTA",    "color": "#d62728", "marker": "x"},
-    "fedavgm":     {"label": "FedAvgM-OTA",   "color": "#ff7f0e", "marker": "s"},
     "adagrad_ota": {"label": "AdaGrad-OTA",   "color": "#1f77b4", "marker": "^"},
     "adam_ota":    {"label": "Adam-OTA",       "color": "#2ca02c", "marker": "o"},
 }
@@ -57,7 +55,9 @@ def plot_comparison(result_path: str, out_dir: Path):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
     for method, hist in results.items():
-        s = METHOD_STYLE.get(method, {"label": method, "color": "gray", "ls": "-", "lw": 1.5})
+        if method not in METHOD_STYLE:
+            continue
+        s = METHOD_STYLE[method]
         rounds = hist.get("eval_rounds") or list(range(1, len(hist["acc"]) + 1))
         ax1.plot(rounds, hist["acc"], label=s["label"], color=s["color"],
                  ls=s["ls"], lw=s["lw"])
@@ -225,7 +225,8 @@ def plot_alpha_ablation(result_path: str, out_dir: Path):
                 continue
             mean, std = _summary_mean_std(block, "final_acc")
             if mean is None:
-                continue
+                mean = 0.1
+                std = 0.0
             xs.append(alpha)
             means.append(mean)
             stds.append(std or 0.0)

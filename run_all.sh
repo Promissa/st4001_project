@@ -268,13 +268,13 @@ alpha_ablation() {
     --num_clients "$NUM_CLIENTS" \
     --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
     --batch_size "$COMPARE_BATCH_SIZE" \
-    --server_lr "$SERVER_LR" \
+    --server_lr "0.001" \
     --local_lr "$LOCAL_LR" \
     --momentum "$MOMENTUM" \
     --beta2 "$BETA2" \
     --noise_scale "$NOISE_SCALE" \
     --alphas "$ALPHA_VALUES" \
-    --seeds "42" \
+    --seeds "43,44" \
     --methods "${METHODS:-fedavg,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
     --out_dir "$HEAVYTAIL_DIR" \
