@@ -47,7 +47,7 @@ Communication rounds   & 100        & Main comparison uses 200 \\
 Local epochs $E$       & 1          & Main comparison uses 5 \\
 Batch size             & 64         & --- \\
 Local learning rate    & 0.01       & --- \\
-Server learning rate $\eta$ & 0.01  & Main comparison uses 0.1; client-count ablation uses $10^{-4}$ \\
+Server learning rate $\eta$ & 0.01  & Client-count ablation uses $10^{-4}$ \\
 Momentum / $\beta_1$   & 0.9        & --- \\
 Adam $\beta_2$         & 0.999      & --- \\
 Adam-OTA $\varepsilon$ & $10^{-8}$  & --- \\
@@ -55,7 +55,7 @@ AdaGrad-OTA $\varepsilon$ & $10^{-4}$ & --- \\
 Noise tail index $\alpha$ & 2.0     & $\alpha$ ablation $\in\{1.1,\dots,1.9\}$; MAC compare 1.3 \\
 Noise scale $\gamma$   & 0.05       & MAC sweep $\in\{0.05,0.1,0.2\}$ \\
 Partition              & non-IID Dirichlet 0.1 & MNIST sanity uses IID \\
-Seeds                  & 42/43/44   & Main comparison and client-count ablation use seed 42 only \\
+Seeds                  & 42/43/44   & Single-seed cases use 42 only \\
 \hline
 \end{tabular}
 \end{center}
@@ -75,9 +75,9 @@ FedAvg-OTA     & $\Delta w = \eta\,\tilde g^t$ \\
 AdaGrad-OTA    & $s_t=\beta_1 s_{t-1}+(1-\beta_1)\tilde g^t;\ v_t=v_{t-1}+|s_t|^\alpha;$
                 $\Delta w = \eta\, s_t/(v_t^{1/\alpha}+\varepsilon)$ \\
 Adam-OTA       & $m_t=\beta_1 m_{t-1}+(1-\beta_1)\tilde g^t;$
-                $v_t=\beta_2 v_{t-1}+(1-\beta_2)|\tilde g^t|^\alpha;$
-                $\hat m_t=m_t/(1-\beta_1^t);\ \hat v_t=v_t/(1-\beta_2^t);$
-                $\Delta w = \eta\, \hat m_t/(\hat v_t^{1/\alpha}+\varepsilon)$ \\
+                $v_t=\beta_2 v_{t-1}+(1-\beta_2)|\tilde g^t|^\alpha;$\\
+            &  $\hat m_t=m_t/(1-\beta_1^t);\ \hat v_t=v_t/(1-\beta_2^t);$
+            $\Delta w = \eta\, \hat m_t/(\hat v_t^{1/\alpha}+\varepsilon)$ \\
 \hline
 \end{tabular}
 \end{center}

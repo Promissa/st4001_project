@@ -52,7 +52,7 @@ implemented sampler, and $\gamma=0.05$.
         Communication rounds & 100 & 200 \\
         Local epochs $E$ & 5 & 5 \\
         Batch size & 64 & 64 \\
-        Server learning rate $\eta$ & 0.01 & 0.1 \\
+        Server learning rate $\eta$ & 0.01 & 0.01 \\
         Local learning rate & 0.01 & 0.01 \\
         Momentum / $\beta_1$ & 0.9 & 0.9 \\
         Adam $\beta_2$ & 0.999 & 0.999 \\
@@ -83,7 +83,8 @@ the server learning rate for AdaGrad-OTA and Adam-OTA.
         Item & Value \\
         \hline
         Dataset / model & CIFAR-10 / ResNet-18 \\
-        Optimizers in alpha study & FedAvg-OTA,\,AdaGrad-OTA,\,Adam-OTA \\
+        Optimizers in alpha study & FedAvg-OTA,AdaGrad-OTA,\\
+        & Adam-OTA \\
         Alpha values & 1.1, 1.3, 1.5, 1.7, 1.9, 2.0 \\
         MAC comparison & no MAC vs MAC, $k=3$ \\
         Learning-rate sweep & AdaGrad-OTA / Adam-OTA at $\alpha=1.3$,
@@ -91,7 +92,7 @@ the server learning rate for AdaGrad-OTA and Adam-OTA.
         Communication rounds & 100 \\
         Local epochs $E$ & 1 \\
         Batch size & 64 \\
-        Server learning rate $\eta$ & 0.01 \\
+        Server learning rate $\eta$ & 0.001 \\
         Local learning rate & 0.01 \\
         Momentum / $\beta_1$ & 0.9 \\
         Adam $\beta_2$ & 0.999 \\
@@ -152,23 +153,23 @@ CIFAR-10 configuration. Therefore, the CIFAR-10 result should not be stated as
 ``Adam-OTA is always best''. A more accurate conclusion is that adaptive
 methods help relative to FedAvg-OTA in this setting.
 This AWGN endpoint motivates the heavier $\alpha$-stable experiments below:
-under Gaussian noise alone, momentum can already be sufficient, so the
-project's distinctive question is whether adaptive normalization and MAC help
-when the channel has impulsive tails.
+Gaussian noise alone is not the strongest stress test, so the project's
+distinctive question is whether adaptive normalization and MAC help when the
+channel has impulsive tails.
 
 \begin{table}[!htbp]
     \centering
     \caption{CIFAR-10 comparison results ($N{=}100$, AWGN
     $\alpha{=}2$, $\gamma{=}0.05$, seed 42, 200 rounds,
-    $E{=}5$, $\eta{=}0.1$; single seed, no error bar).}
+    $E{=}5$, $\eta{=}0.01$; single seed, no error bar).}
     \label{tab:cifar-results}
     \begin{tabular}{l|c|c|c}
         \hline
         Method & Final loss & Final accuracy & Best accuracy \\
         \hline
-        FedAvg-OTA & 1.6184 & 38.93\% & 38.93\% \\
-        AdaGrad-OTA & 1.5359 & 42.38\% & 42.70\% \\
-        Adam-OTA & 1.6576 & 40.66\% & 40.66\% \\
+        FedAvg-OTA & 0.9670 & 65.38\% & 65.38\% \\
+        AdaGrad-OTA & 0.8706 & 69.27\% & 69.27\% \\
+        Adam-OTA & 0.9278 & 67.41\% & 68.08\% \\
         \hline
     \end{tabular}
 \end{table}
@@ -177,15 +178,8 @@ when the channel has impulsive tails.
     \centering
     \includegraphics[width=0.95\textwidth]{../results/figures/cifar10_resnet18_alpha2.0_N100_curves.png}
     \caption{CIFAR-10 comparison curves for FedAvg-OTA,
-    AdaGrad-OTA, and Adam-OTA. The loss panel uses a logarithmic
-    $y$-axis because AdaGrad-OTA and Adam-OTA have very large but
-    finite early-round transient test losses before recovering. This
-    transient comes from the first-round
-    numerator/denominator imbalance: with $v_0{=}0$, the adaptive
-    denominator $v_t^{1/\alpha}{+}\varepsilon$ reduces to
-    $\varepsilon\in\{10^{-4},10^{-8}\}$, so the first effective step is
-    on the order of $\eta/\varepsilon$. After a few rounds, $v_t$
-    accumulates and the effective step normalizes.}
+    AdaGrad-OTA, and Adam-OTA under AWGN. The comparison focuses on the
+    plain FedAvg baseline and the two adaptive server optimizers.}
     \label{fig:cifar-curves}
 \end{figure}
 
@@ -220,7 +214,7 @@ successful seeds rather than silently averaging failed runs.
             \hline
             Result file & Status \\
             \hline
-            \path{results/heavytail/alpha_ablation_cifar10_resnet18.json}
+            \path{results/heavytail1/alpha_ablation_cifar10_resnet18.json}
             & Run \path{./run_all.sh alpha_ablation} and then
             \path{./run_all.sh paper_update} \\
             \hline
@@ -243,14 +237,13 @@ successful seeds rather than silently averaging failed runs.
 
 Table \ref{tab:alpha-ablation} shows a clear stability separation between
 methods. FedAvg-OTA produces no successful runs for
-$\alpha\leq1.7$ under the finite-value guard, and only one of three seeds
-completes at $\alpha=1.9$. At the Gaussian endpoint $\alpha=2$, the
-baseline completes all seeds and reaches 38.53\% mean final
+$\alpha\leq1.9$ under the finite-value guard. At the Gaussian endpoint
+$\alpha=2$, the baseline completes all seeds and reaches 21.43\% mean final
 accuracy. In contrast, both adaptive methods complete all seeds
-for every tested $\alpha$. AdaGrad-OTA improves from 30.22\% at
-$\alpha=1.1$ to 41.82\% at $\alpha=1.9$ and 42.25\% at $\alpha=2$.
-Adam-OTA improves from 20.69\% at $\alpha=1.1$ to 37.98\% at
-$\alpha=1.9$ and 38.16\% at $\alpha=2$.
+for every tested $\alpha$. AdaGrad-OTA improves from 22.12\% at
+$\alpha=1.1$ to 35.35\% at $\alpha=1.9$ and 36.67\% at $\alpha=2$.
+Adam-OTA improves from 28.64\% at $\alpha=1.1$ to 39.65\% at
+$\alpha=1.9$ and 39.74\% at $\alpha=2$.
 
 The result supports the core robustness claim: server-side fractional
 second-moment normalization makes the implemented OTA-FL loop much less
@@ -262,16 +255,16 @@ a full reproduction of \cite{wang2024adaptive}. The implementation omits
 fading and power control, uses a shared $\alpha$ for both the channel and the
 adaptive denominator, and uses a single global server learning rate rather
 than per-method tuning in this table. The next section runs a targeted
-learning-rate sweep to test how much of Adam-OTA's lower $\alpha=1.3$ result
-comes from lr mismatch.
+learning-rate sweep to test how sensitive the $\alpha=1.3$ comparison is to
+the shared learning-rate choice.
 
 \section{Server Learning-Rate Sweep}
 \label{sec:lr-sweep}
 The tail-index ablation uses a single server learning rate,
-$\eta=10^{-2}$, for all methods. To check whether Adam-OTA's lower default
-accuracy at $\alpha=1.3$ is mainly a tuning artifact, we rerun AdaGrad-OTA
-and Adam-OTA on the same CIFAR-10 / ResNet-18 setting over seven learning
-rates from $10^{-4}$ to $10^{-1}$.
+$\eta=10^{-3}$, for all methods. To check sensitivity to this shared
+learning-rate choice at $\alpha=1.3$, we rerun AdaGrad-OTA and Adam-OTA on
+the same CIFAR-10 / ResNet-18 setting over seven learning rates from
+$10^{-4}$ to $10^{-1}$.
 
 \IfFileExists{data/generated/lr_sweep_table.tex}{
     \input{data/generated/lr_sweep_table}
@@ -420,7 +413,7 @@ server learning rate $\eta=10^{-4}$, local learning rate $0.01$,
 $\beta_1=0.9$, $\beta_2=0.999$, non-IID Dirichlet 0.1, seed 42). The much
 smaller server learning rate, smaller local epochs, and shorter budget
 explain why the absolute Adam-OTA accuracies here are below
-Table~\ref{tab:cifar-results}, which uses $\eta=0.1$, $E=5$, and 200
+Table~\ref{tab:cifar-results}, which uses $\eta=0.01$, $E=5$, and 200
 rounds. The ablation isolates the effect of $N$ rather than tuning a
 state-of-the-art Adam-OTA configuration.
 
@@ -480,16 +473,16 @@ robustness lever.
 
 \subsection{Failures and Negative Results}
 Three observations are best reported as negative results rather than
-buried in caveats. (i) Adam-OTA does not outperform AdaGrad-OTA in the
-current heavy-tail sweep, despite the stronger Adam-like result reported
-by~\cite{wang2024adaptive}; the learning-rate sweep shows that lr mismatch
-explains part, but not all, of the gap at $\alpha=1.3$. (ii) MAC at the
+buried in caveats. (i) Adam-OTA does not universally dominate AdaGrad-OTA:
+although it is stronger in the current tail-index ablation, the targeted
+learning-rate sweep still finds an AdaGrad-OTA setting with slightly higher
+final accuracy at $\alpha=1.3$. (ii) MAC at the
 default $\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point yields no
 measurable improvement within seed variation. (iii) The Adam-OTA CIFAR-10
 result at $\alpha=2$ in
-Table~\ref{tab:cifar-results} (40.66\%) is only slightly above FedAvg-OTA
-(38.93\%), showing that second-moment normalization is not costless in the Gaussian
-regime.
+Table~\ref{tab:cifar-results} (67.41\%) is above FedAvg-OTA (65.38\%) but
+below AdaGrad-OTA (69.27\%), showing that second-moment normalization is not
+costless in the Gaussian regime.
 
 \subsection{Threats to Validity}
 \label{sec:threats-validity}

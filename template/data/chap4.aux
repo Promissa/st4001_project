@@ -13,14 +13,14 @@
 \@writefile{toc}{\contentsline {section}{\numberline {4.4}Main Method Comparison}{17}{section.4.4}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {4.3}{\ignorespaces MNIST comparison results ($N{=}10$, AWGN $\alpha {=}2$, $\gamma {=}0.05$, seed 42, 100 rounds, $E{=}5$, $\eta {=}0.01$; single seed, no error bar).}}{18}{table.caption.10}\protected@file@percent }
 \newlabel{tab:mnist-results}{{4.3}{18}{MNIST comparison results ($N{=}10$, AWGN $\alpha {=}2$, $\gamma {=}0.05$, seed 42, 100 rounds, $E{=}5$, $\eta {=}0.01$; single seed, no error bar)}{table.caption.10}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4.4}{\ignorespaces CIFAR-10 comparison results ($N{=}100$, AWGN $\alpha {=}2$, $\gamma {=}0.05$, seed 42, 200 rounds, $E{=}5$, $\eta {=}0.1$; single seed, no error bar).}}{18}{table.caption.11}\protected@file@percent }
-\newlabel{tab:cifar-results}{{4.4}{18}{CIFAR-10 comparison results ($N{=}100$, AWGN $\alpha {=}2$, $\gamma {=}0.05$, seed 42, 200 rounds, $E{=}5$, $\eta {=}0.1$; single seed, no error bar)}{table.caption.11}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces CIFAR-10 comparison curves for FedAvg-OTA, AdaGrad-OTA, and Adam-OTA. The loss panel uses a logarithmic $y$-axis because AdaGrad-OTA and Adam-OTA have very large but finite early-round transient test losses before recovering. This transient comes from the first-round numerator/denominator imbalance: with $v_0{=}0$, the adaptive denominator $v_t^{1/\alpha }{+}\varepsilon $ reduces to $\varepsilon \in \{10^{-4},10^{-8}\}$, so the first effective step is on the order of $\eta /\varepsilon $. After a few rounds, $v_t$ accumulates and the effective step normalizes.}}{18}{figure.caption.12}\protected@file@percent }
-\newlabel{fig:cifar-curves}{{4.1}{18}{CIFAR-10 comparison curves for FedAvg-OTA, AdaGrad-OTA, and Adam-OTA. The loss panel uses a logarithmic $y$-axis because AdaGrad-OTA and Adam-OTA have very large but finite early-round transient test losses before recovering. This transient comes from the first-round numerator/denominator imbalance: with $v_0{=}0$, the adaptive denominator $v_t^{1/\alpha }{+}\varepsilon $ reduces to $\varepsilon \in \{10^{-4},10^{-8}\}$, so the first effective step is on the order of $\eta /\varepsilon $. After a few rounds, $v_t$ accumulates and the effective step normalizes}{figure.caption.12}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.4}{\ignorespaces CIFAR-10 comparison results ($N{=}100$, AWGN $\alpha {=}2$, $\gamma {=}0.05$, seed 42, 200 rounds, $E{=}5$, $\eta {=}0.01$; single seed, no error bar).}}{18}{table.caption.11}\protected@file@percent }
+\newlabel{tab:cifar-results}{{4.4}{18}{CIFAR-10 comparison results ($N{=}100$, AWGN $\alpha {=}2$, $\gamma {=}0.05$, seed 42, 200 rounds, $E{=}5$, $\eta {=}0.01$; single seed, no error bar)}{table.caption.11}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces CIFAR-10 comparison curves for FedAvg-OTA, AdaGrad-OTA, and Adam-OTA under AWGN. The comparison focuses on the plain FedAvg baseline and the two adaptive server optimizers.}}{18}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:cifar-curves}{{4.1}{18}{CIFAR-10 comparison curves for FedAvg-OTA, AdaGrad-OTA, and Adam-OTA under AWGN. The comparison focuses on the plain FedAvg baseline and the two adaptive server optimizers}{figure.caption.12}{}}
+\citation{wang2024adaptive}
 \@writefile{toc}{\contentsline {section}{\numberline {4.5}Alpha-Stable Tail-Index Ablation}{19}{section.4.5}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {4.5}{\ignorespaces CIFAR-10 alpha-stable tail-index ablation: final accuracy, mean $\pm $ std over seeds}}{19}{table.caption.13}\protected@file@percent }
 \newlabel{tab:alpha-ablation}{{4.5}{19}{CIFAR-10 alpha-stable tail-index ablation: final accuracy, mean $\pm $ std over seeds}{table.caption.13}{}}
-\citation{wang2024adaptive}
 \@writefile{lof}{\contentsline {figure}{\numberline {4.2}{\ignorespaces CIFAR-10 final accuracy as a function of $\alpha $-stable tail index $\alpha $.}}{20}{figure.caption.14}\protected@file@percent }
 \newlabel{fig:alpha-ablation}{{4.2}{20}{CIFAR-10 final accuracy as a function of $\alpha $-stable tail index $\alpha $}{figure.caption.14}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.6}Server Learning-Rate Sweep}{20}{section.4.6}\protected@file@percent }
@@ -37,14 +37,13 @@
 \@writefile{lof}{\contentsline {figure}{\numberline {4.4}{\ignorespaces CIFAR-10 comparison of no-MAC and MAC under $\alpha $-stable interference.}}{23}{figure.caption.18}\protected@file@percent }
 \newlabel{fig:mac-compare}{{4.4}{23}{CIFAR-10 comparison of no-MAC and MAC under $\alpha $-stable interference}{figure.caption.18}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.8}Client-Count Ablation}{24}{section.4.8}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {4.8}{\ignorespaces CIFAR-10 client-count ablation with Adam-OTA ($\eta =10^{-4}$, $E=1$, 100 rounds, $\alpha =2$, $\gamma =0.05$, $\beta _2=0.999$, non-IID Dirichlet 0.1, seed 42)}}{25}{table.caption.19}\protected@file@percent }
-\newlabel{tab:client-ablation}{{4.8}{25}{CIFAR-10 client-count ablation with Adam-OTA ($\eta =10^{-4}$, $E=1$, 100 rounds, $\alpha =2$, $\gamma =0.05$, $\beta _2=0.999$, non-IID Dirichlet 0.1, seed 42)}{table.caption.19}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.8}{\ignorespaces CIFAR-10 client-count ablation with Adam-OTA ($\eta =10^{-4}$, $E=1$, 100 rounds, $\alpha =2$, $\gamma =0.05$, $\beta _2=0.999$, non-IID Dirichlet 0.1, seed 42)}}{24}{table.caption.19}\protected@file@percent }
+\newlabel{tab:client-ablation}{{4.8}{24}{CIFAR-10 client-count ablation with Adam-OTA ($\eta =10^{-4}$, $E=1$, 100 rounds, $\alpha =2$, $\gamma =0.05$, $\beta _2=0.999$, non-IID Dirichlet 0.1, seed 42)}{table.caption.19}{}}
+\@writefile{toc}{\contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{24}{paragraph*.21}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {4.5}{\ignorespaces CIFAR-10 client-count learning curves for Adam-OTA.}}{25}{figure.caption.20}\protected@file@percent }
 \newlabel{fig:client-ablation}{{4.5}{25}{CIFAR-10 client-count learning curves for Adam-OTA}{figure.caption.20}{}}
-\@writefile{toc}{\contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{25}{paragraph*.21}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {4.9}Discussion}{25}{section.4.9}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.9.1}Findings}{25}{subsection.4.9.1}\protected@file@percent }
-\citation{wang2024adaptive}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.9.2}Failures and Negative Results}{26}{subsection.4.9.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.9.3}Threats to Validity}{26}{subsection.4.9.3}\protected@file@percent }
 \newlabel{sec:threats-validity}{{4.9.3}{26}{Threats to Validity}{subsection.4.9.3}{}}

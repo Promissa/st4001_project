@@ -6,10 +6,9 @@ as an implicit, CSI-free filter for an $\alpha$-stable OTA-FL channel.
 The main supported claim is empirical: under the three-seed CIFAR-10
 tail-index ablation with $\gamma=0.05$ and $\alpha\in\{1.1,1.3,1.5,
 1.7,1.9\}$, AdaGrad-OTA and Adam-OTA complete all runs, while
-FedAvg-OTA completes no runs for $\alpha\leq1.7$ and
-only one of three seeds at $\alpha=1.9$. AdaGrad-OTA reaches
-30.22--41.82\% final accuracy across the heavy-tail sweep, and
-Adam-OTA reaches 20.69--37.98\%. This supports the hypothesis that a
+FedAvg-OTA completes no runs for $\alpha\leq1.9$. AdaGrad-OTA reaches
+22.12--35.35\% final accuracy across the heavy-tail sweep, and
+Adam-OTA reaches 28.64--39.65\%. This supports the hypothesis that a
 fractional second-moment accumulator contracts the effective server
 learning rate on impulsive rounds and improves stability.
 
@@ -17,8 +16,7 @@ The claim is scoped rather than absolute. The observed $\alpha$-trend
 for adaptive methods is broadly monotone and agrees with the qualitative
 message that heavier tails slow training. MAC at the default
 $\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point is empirically
-neutral; Adam-OTA does not outperform AdaGrad-OTA under the current
-hyperparameters; and the targeted $\alpha=1.3$ learning-rate sweep shows
+neutral; and the targeted $\alpha=1.3$ learning-rate sweep shows
 that Adam-OTA improves from 26.70\% to 33.65\% when $\eta$ is reduced from
 $10^{-2}$ to $10^{-3}$, but still does not exceed AdaGrad-OTA's best
 34.62\%, which shows that fractional second-moment

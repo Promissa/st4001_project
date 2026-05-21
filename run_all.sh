@@ -144,7 +144,7 @@ compare_cifar() {
     --num_clients "$NUM_CLIENTS" \
     --local_epochs "$LOCAL_EPOCHS" \
     --batch_size "$COMPARE_BATCH_SIZE" \
-    --server_lr "$COMPARE_SERVER_LR" \
+    --server_lr "0.01" \
     --local_lr "$LOCAL_LR" \
     --momentum "$MOMENTUM" \
     --beta2 "$BETA2" \

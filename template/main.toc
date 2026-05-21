@@ -31,7 +31,7 @@
 \contentsline {section}{\numberline {4.6}Server Learning-Rate Sweep}{20}{section.4.6}%
 \contentsline {section}{\numberline {4.7}MAC Robust Pre-Processing}{22}{section.4.7}%
 \contentsline {section}{\numberline {4.8}Client-Count Ablation}{24}{section.4.8}%
-\contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{25}{paragraph*.21}%
+\contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{24}{paragraph*.21}%
 \contentsline {section}{\numberline {4.9}Discussion}{25}{section.4.9}%
 \contentsline {subsection}{\numberline {4.9.1}Findings}{25}{subsection.4.9.1}%
 \contentsline {subsection}{\numberline {4.9.2}Failures and Negative Results}{26}{subsection.4.9.2}%
