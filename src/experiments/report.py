@@ -35,15 +35,18 @@ def _fmt_block(block: dict | None, metric: str = "final_acc") -> str:
     if not block:
         return "--"
     mean, std = _mean_std(block, metric)
-    text = _fmt_acc(mean, std)
     summary = block.get("summary", {})
     ok_runs = summary.get("ok_runs")
     num_runs = summary.get("num_runs")
     if ok_runs is not None and num_runs is not None and ok_runs != num_runs:
         if mean is None:
             return f"-- ({ok_runs}/{num_runs} ok)"
+        if std is None or abs(std) < 1e-12:
+            text = f"{mean * 100:.2f}\\%"
+        else:
+            text = _fmt_acc(mean, std)
         return f"{text} ({ok_runs}/{num_runs} ok)"
-    return text
+    return _fmt_acc(mean, std)
 
 
 def write_alpha_table(path: str, out_dir: Path) -> Path:

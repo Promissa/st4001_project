@@ -74,10 +74,10 @@ reusable artifacts.
     $\eta=10^{-2}$ with 34.62\%, so tuning narrows but does not reverse
     the ranking in the tested grid.
     \item At $\alpha=1.3$, $\gamma=0.05$, $k=3$, Median Anchored
-    Clipping is empirically neutral within seed variation. The MAC
-    channel therefore demands a stronger operating point
-    (smaller $\alpha$, larger $\gamma$, or smaller $k$) before it can
-    deliver a measurable accuracy gain.
+    Clipping stabilizes the fixed-step FedAvg-OTA baseline, changing it
+    from chance-level 10.00\% with 0/3 successful no-MAC runs to
+    20.34\% mean final accuracy with MAC, and improves the two adaptive
+    methods by 2.73 and 4.97 percentage points.
 \end{itemize}
 
 \noindent\textbf{Artifacts}

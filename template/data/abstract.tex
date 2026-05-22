@@ -31,9 +31,12 @@ This trend matches the channel interpretation: larger $\alpha$ means a
 lighter-tailed, less impulsive channel. In contrast, FedAvg-OTA
 completes no runs for $\alpha\leq1.9$. At the AWGN endpoint
 $\alpha=2$, all methods complete, with Adam-OTA reaching 39.74\% mean
-final accuracy. MAC at the
-default operating point ($\alpha=1.3$, $\gamma=0.05$, $k=3$) is
-empirically neutral within seed variation. A targeted server
+final accuracy. In the updated MAC comparison at
+$\alpha=1.3$, $\gamma=0.05$, and $k=3$, the no-MAC FedAvg baseline is
+reported at chance accuracy, 10.00\%, with 0/3 successful runs, while
+MAC completes all three seeds and reaches 20.34\% mean final accuracy;
+MAC also raises AdaGrad-OTA from 25.29\% to 28.02\% and Adam-OTA from
+33.87\% to 38.84\%. A targeted server
 learning-rate sweep under the severe $\alpha=1.3$ channel shows that
 Adam-OTA is tuning-sensitive: reducing $\eta$ from $10^{-2}$ to
 $10^{-3}$ improves its mean final accuracy from 26.70\% to 33.65\%,

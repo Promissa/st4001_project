@@ -34,7 +34,7 @@
 \contentsline {paragraph}{Why does $N$ not scale accuracy faster?}{24}{paragraph*.21}%
 \contentsline {section}{\numberline {4.9}Discussion}{25}{section.4.9}%
 \contentsline {subsection}{\numberline {4.9.1}Findings}{25}{subsection.4.9.1}%
-\contentsline {subsection}{\numberline {4.9.2}Failures and Negative Results}{26}{subsection.4.9.2}%
+\contentsline {subsection}{\numberline {4.9.2}Failures and Negative Results}{25}{subsection.4.9.2}%
 \contentsline {subsection}{\numberline {4.9.3}Threats to Validity}{26}{subsection.4.9.3}%
 \contentsline {chapter}{\numberline {5}Conclusion and Future Work}{27}{chapter.5}%
 \contentsline {section}{\numberline {5.1}Conclusion}{27}{section.5.1}%

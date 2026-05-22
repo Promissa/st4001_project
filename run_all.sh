@@ -290,15 +290,15 @@ mac_compare() {
     --num_clients "$NUM_CLIENTS" \
     --local_epochs "${HEAVYTAIL_LOCAL_EPOCHS}" \
     --batch_size "$COMPARE_BATCH_SIZE" \
-    --server_lr "$SERVER_LR" \
+    --server_lr "0.001" \
     --local_lr "$LOCAL_LR" \
     --momentum "$MOMENTUM" \
     --beta2 "$BETA2" \
     --noise_scale "$NOISE_SCALE" \
     --mac_alpha "$MAC_ALPHA" \
     --mac_clip "$MAC_CLIP" \
-    --seeds "$SEEDS" \
-    --methods "${METHODS:-fedavg,fedavgm,adagrad_ota,adam_ota}" \
+    --seeds "42, 43, 44" \
+    --methods "${METHODS:-fedavg,adagrad_ota,adam_ota}" \
     --dir_conc "$DIR_CONC" \
     --out_dir "$HEAVYTAIL_DIR" \
     "${HEAVYTAIL_GUARD_FLAGS[@]}" \

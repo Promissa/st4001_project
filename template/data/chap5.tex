@@ -14,10 +14,12 @@ learning rate on impulsive rounds and improves stability.
 
 The claim is scoped rather than absolute. The observed $\alpha$-trend
 for adaptive methods is broadly monotone and agrees with the qualitative
-message that heavier tails slow training. MAC at the default
-$\alpha=1.3$, $\gamma=0.05$, $k=3$ operating point is empirically
-neutral; and the targeted $\alpha=1.3$ learning-rate sweep shows
-that Adam-OTA improves from 26.70\% to 33.65\% when $\eta$ is reduced from
+message that heavier tails slow training. In the updated MAC comparison at
+$\alpha=1.3$, $\gamma=0.05$, $k=3$, MAC turns the FedAvg-OTA baseline from
+chance-level 10.00\% with 0/3 successful no-MAC runs into 20.34\% mean final
+accuracy and raises the adaptive-method final accuracies as well. The targeted
+$\alpha=1.3$ learning-rate sweep shows that Adam-OTA improves from 26.70\% to
+33.65\% when $\eta$ is reduced from
 $10^{-2}$ to $10^{-3}$, but still does not exceed AdaGrad-OTA's best
 34.62\%, which shows that fractional second-moment
 normalization is not costless in the Gaussian regime.
@@ -47,6 +49,6 @@ learning-rate sweep into a full per-method $\eta$ and $\beta_2$ sweep for
 each $\alpha$, including the FedAvg-style baselines. A second extension is
 to replace the current additive-noise oracle with a richer wireless model
 that includes fading, power control, and synchronization error. Finally, the
-MAC sweep should be repeated at stronger operating points, such as smaller
-$\alpha$, larger $\gamma$, or smaller clipping factor $k$, where robust
-pre-processing has a clearer signal to act on.
+MAC sweep should be expanded across smaller $\alpha$, larger $\gamma$, and
+several clipping factors $k$ to determine when the observed pre-processing
+gain persists and when clipping begins to remove useful gradient signal.
